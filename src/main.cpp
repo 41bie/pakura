@@ -1,8 +1,15 @@
 // --------------------------------------------------
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <SPI.h>
+#include <SD.h>
+#include <PNGdec.h>
 
 TFT_eSPI tft = TFT_eSPI();
+
+PNG png;
+#define SD_CS 5
+File pngFile;
 
 // --------------------------------------------------
 // Screen dimensions
@@ -51,6 +58,13 @@ void drawStatsArea();
 void drawDialogueArea();
 void drawButtonArea();
 
+void drawPakura(const char* filename);
+void *pngOpen(const char *filename, int32_t *size);
+void pngClose(void *handle);
+int32_t pngRead(PNGFILE *page, uint8_t *buffer, int32_t length);
+int32_t pngSeek(PNGFILE *page, int32_t position);
+int pngDraw(PNGDRAW *pDraw);
+
 
 // --------------------------------------------------
 // Setup
@@ -72,6 +86,14 @@ void setup() {
 
     // Clear screen
     tft.fillScreen(BG_COLOR);
+
+    // Initialise SD card
+    if (!SD.begin(SD_CS)) {
+        Serial.println("SD CARD FAILED");
+    }
+    else {
+        Serial.println("SD CARD INITIALIZED");
+    }
 
     // Draw the interface
     drawUI();
@@ -192,6 +214,7 @@ void drawStatusBar() {
 
 void drawCharacterArea() {
 
+    // Clear character area
     tft.fillRect(
         0,
         CHARACTER_Y,
@@ -200,24 +223,8 @@ void drawCharacterArea() {
         BG_COLOR
     );
 
-    tft.drawRect(
-        0,
-        CHARACTER_Y,
-        SCREEN_WIDTH,
-        CHARACTER_H,
-        LINE_COLOR
-    );
-
-    tft.setTextColor(TEXT_COLOR, BG_COLOR);
-    tft.setTextSize(2);
-
-    tft.setCursor(60, CHARACTER_Y + 65);
-    tft.print("[ CHARACTER ]");
-
-    tft.setTextSize(1);
-
-    tft.setCursor(72, CHARACTER_Y + 95);
-    tft.print("240 x 150");
+    // Draw Pakura's neutral expression
+    drawPakura("/pakura/neutral.png");
 }
 
 // --------------------------------------------------
@@ -370,4 +377,130 @@ void drawButtonArea() {
 
     tft.setCursor(184, buttonY + 14);
     tft.print("DATA");
+}
+
+// --------------------------------------------------
+// PNG file handling
+// --------------------------------------------------
+
+void *pngOpen(const char *filename, int32_t *size) {
+
+    pngFile = SD.open(filename, FILE_READ);
+
+    if (!pngFile) {
+        Serial.print("Failed to open PNG: ");
+        Serial.println(filename);
+        return nullptr;
+    }
+
+    *size = pngFile.size();
+
+    return &pngFile;
+}
+
+
+void pngClose(void *handle) {
+
+    File *file = (File *)handle;
+
+    if (file) {
+        file->close();
+    }
+}
+
+
+int32_t pngRead(
+    PNGFILE *page,
+    uint8_t *buffer,
+    int32_t length
+) {
+
+    File *file = (File *)page->fHandle;
+
+    if (!file) {
+        return 0;
+    }
+
+    return file->read(buffer, length);
+}
+
+
+int32_t pngSeek(
+    PNGFILE *page,
+    int32_t position
+) {
+
+    File *file = (File *)page->fHandle;
+
+    if (!file) {
+        return 0;
+    }
+
+    return file->seek(position);
+}
+
+
+// --------------------------------------------------
+// PNG drawing callback
+// --------------------------------------------------
+
+int pngDraw(PNGDRAW *pDraw) {
+
+    uint16_t lineBuffer[240];
+
+    png.getLineAsRGB565(
+        pDraw,
+        lineBuffer,
+        PNG_RGB565_BIG_ENDIAN,
+        0xffffffff
+    );
+
+    tft.pushImage(
+        0,
+        CHARACTER_Y + pDraw->y,
+        pDraw->iWidth,
+        1,
+        lineBuffer
+    );
+
+    return 1;
+}
+
+
+// --------------------------------------------------
+// Draw Pakura expression
+// --------------------------------------------------
+
+void drawPakura(const char* filename) {
+
+    Serial.print("Loading expression: ");
+    Serial.println(filename);
+
+    int result = png.open(
+        filename,
+        pngOpen,
+        pngClose,
+        pngRead,
+        pngSeek,
+        pngDraw
+    );
+
+    if (result != PNG_SUCCESS) {
+
+        Serial.print("PNG ERROR: ");
+        Serial.println(result);
+
+        return;
+    }
+
+    Serial.print("PNG size: ");
+    Serial.print(png.getWidth());
+    Serial.print(" x ");
+    Serial.println(png.getHeight());
+
+    png.decode(NULL, 0);
+
+    png.close();
+
+    Serial.println("Expression loaded.");
 }
