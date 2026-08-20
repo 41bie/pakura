@@ -21,14 +21,16 @@ const int STATUS_H = 20;
 const int CHARACTER_Y = 20;
 const int CHARACTER_H = 150;
 
-const int STATS_Y = 170;
-const int STATS_H = 60;
-
-const int DIALOGUE_Y = 230;
+const int DIALOGUE_Y = 170;
 const int DIALOGUE_H = 35;
+
+const int STATS_Y = 205;
+const int STATS_H = 60;
 
 const int BUTTONS_Y = 265;
 const int BUTTONS_H = 55;
+
+unsigned long lastTimeUpdate = 0;
 
 // --------------------------------------------------
 // Colours
@@ -83,13 +85,22 @@ void setup() {
 
 void loop() {
 
-    // Nothing here yet.
-    // Eventually this will handle:
+    
+    // do to:
     // - touchscreen input
     // - character state
     // - animations
     // - stats
     // - dialogue
+
+    // Update the clock once per second
+    if (millis() - lastTimeUpdate >= 1000) {
+
+        lastTimeUpdate = millis();
+
+        drawStatusBar();
+    }    
+
 }
 
 // --------------------------------------------------
@@ -130,11 +141,46 @@ void drawStatusBar() {
     tft.setTextColor(TEXT_COLOR, BG_COLOR);
     tft.setTextSize(1);
 
-    tft.setCursor(6, 6);
-    tft.print("time");
+    // -----------------------------
+    // Time
+    // -----------------------------
 
-    tft.setCursor(80, 6);
-    tft.print("PAKURA");
+    unsigned long totalSeconds = millis() / 1000;
+
+    int hours = (totalSeconds / 3600) % 24;
+    int minutes = (totalSeconds / 60) % 60;
+
+    char timeString[6];
+
+    snprintf(
+        timeString,
+        sizeof(timeString),
+        "%02d:%02d",
+        hours,
+        minutes
+    );
+
+    tft.setCursor(6, 6);
+    tft.print(timeString);
+
+
+    // -----------------------------
+    // middle text part
+    // -----------------------------
+
+    const char* name = "PAKURA";
+
+    int nameWidth = tft.textWidth(name);
+
+    int nameX = (SCREEN_WIDTH - nameWidth) / 2;
+
+    tft.setCursor(nameX, 6);
+    tft.print(name);
+
+
+    // -----------------------------
+    // Level
+    // -----------------------------
 
     tft.setCursor(205, 6);
     tft.print("Lv1");
