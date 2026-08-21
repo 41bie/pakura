@@ -7,6 +7,8 @@
 
 TFT_eSPI tft = TFT_eSPI();
 
+const char* currentExpression = "neutral";
+
 PNG png;
 #define SD_CS 5
 File pngFile;
@@ -57,6 +59,8 @@ void drawCharacterArea();
 void drawStatsArea();
 void drawDialogueArea();
 void drawButtonArea();
+
+void setExpression(const char* expression);
 
 void drawPakura(const char* filename);
 void *pngOpen(const char *filename, int32_t *size);
@@ -115,7 +119,7 @@ void loop() {
     // - stats
     // - dialogue
 
-    // Update the clock once per second
+    // Update the clock once per second (does 1 min currently)
     if (millis() - lastTimeUpdate >= 1000) {
 
         lastTimeUpdate = millis();
@@ -224,7 +228,7 @@ void drawCharacterArea() {
     );
 
     // Draw Pakura's neutral expression
-    drawPakura("/pakura/neutral.png");
+    setExpression("neutral");
 }
 
 // --------------------------------------------------
@@ -466,6 +470,28 @@ int pngDraw(PNGDRAW *pDraw) {
     return 1;
 }
 
+// --------------------------------------------------
+// Set Pakura's expression
+// --------------------------------------------------
+
+void setExpression(const char* expression) {
+
+    char filename[64];
+
+    snprintf(
+        filename,
+        sizeof(filename),
+        "/pakura/%s.png",
+        expression
+    );
+
+    Serial.print("Changing expression to: ");
+    Serial.println(expression);
+
+    drawPakura(filename);
+
+    currentExpression = expression;
+}
 
 // --------------------------------------------------
 // Draw Pakura expression
