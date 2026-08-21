@@ -662,13 +662,14 @@ void handleTouch() {
 
         readTouch(x, y);
 
+        // Rotation 1 uses the touch controller axes in the opposite screen frame.
         int pixelX = clampPixel(
-            map(y, RAW_Y_LEFT, RAW_Y_RIGHT, 0, 239),
+            map(x, RAW_X_TOP, RAW_X_BOTTOM, 0, 239),
             239
         );
 
         int pixelY = clampPixel(
-            map(x, RAW_X_TOP, RAW_X_BOTTOM, 0, 319),
+            map(y, RAW_Y_LEFT, RAW_Y_RIGHT, 0, 319),
             319
         );
 
@@ -684,7 +685,14 @@ void handleTouch() {
         Serial.print(y);
         Serial.println(")");
 
-        if (pixelY >= CHARACTER_Y && pixelY < CHARACTER_Y + CHARACTER_H) {
+        bool touchedCharacter =
+            pixelY >= CHARACTER_Y && pixelY < CHARACTER_Y + CHARACTER_H;
+
+        if (!touchedCharacter) {
+            pakuraTouchCount = 0;
+        }
+
+        if (touchedCharacter && !isBlushing) {
             unsigned long touchTime = millis();
 
             if (touchTime - lastPakuraTouch >= TOUCH_SEQUENCE_TIMEOUT) {
