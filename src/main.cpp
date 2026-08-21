@@ -9,6 +9,21 @@ TFT_eSPI tft = TFT_eSPI();
 
 const char* currentExpression = "neutral";
 
+// --------------------------------------------------
+// Touchscreen
+// --------------------------------------------------
+
+#define TOUCH_MOSI 32
+#define TOUCH_MISO 39
+#define TOUCH_CLK  25
+#define TOUCH_CS   33
+#define TOUCH_IRQ  36
+
+#define RAW_X_TOP     340
+#define RAW_X_BOTTOM 3641
+#define RAW_Y_LEFT   3709
+#define RAW_Y_RIGHT   240
+
 PNG png;
 #define SD_CS 5
 File pngFile;
@@ -42,6 +57,25 @@ const int BUTTONS_H = 55;
 unsigned long lastTimeUpdate = 0;
 
 // --------------------------------------------------
+// Dialogue
+// --------------------------------------------------
+
+String currentDialogue = "This is a placeholder message.";
+
+// --------------------------------------------------
+// Touch easter egg
+// --------------------------------------------------
+
+const unsigned long TOUCH_SEQUENCE_TIMEOUT = 1000;
+const unsigned long BLUSH_DURATION = 3500;
+const uint8_t REQUIRED_TOUCHES = 3;
+
+uint8_t pakuraTouchCount = 0;
+unsigned long lastPakuraTouch = 0;
+unsigned long blushStartedAt = 0;
+bool isBlushing = false;
+
+// --------------------------------------------------
 // Colours
 // --------------------------------------------------
 
@@ -69,6 +103,10 @@ int32_t pngRead(PNGFILE *page, uint8_t *buffer, int32_t length);
 int32_t pngSeek(PNGFILE *page, int32_t position);
 int pngDraw(PNGDRAW *pDraw);
 
+void handleTouch();
+void updateBlushState();
+bool loadRandomDialogue(const char* filename);
+
 
 // --------------------------------------------------
 // Setup
@@ -85,7 +123,18 @@ void setup() {
     // Initialise display
     tft.init();
 
-    // Portrait orientation
+    // Initialise touchscreen
+
+    pinMode(TOUCH_MOSI, OUTPUT);
+    pinMode(TOUCH_MISO, INPUT);
+    pinMode(TOUCH_CLK, OUTPUT);
+    pinMode(TOUCH_CS, OUTPUT);
+    pinMode(TOUCH_IRQ, INPUT);
+
+    digitalWrite(TOUCH_CS, HIGH);
+    digitalWrite(TOUCH_CLK, LOW);
+
+    // Portrait orientation for the physically mounted display
     tft.setRotation(1);
 
     // Clear screen
@@ -97,6 +146,8 @@ void setup() {
     }
     else {
         Serial.println("SD CARD INITIALIZED");
+        randomSeed(micros() ^ analogRead(34));
+        loadRandomDialogue("/dialogue/greeting.txt");
     }
 
     // Draw the interface
@@ -125,7 +176,9 @@ void loop() {
         lastTimeUpdate = millis();
 
         drawStatusBar();
-    }    
+    }
+    handleTouch();    
+    updateBlushState();
 
 }
 
@@ -313,10 +366,12 @@ void drawDialogueArea() {
     tft.setTextSize(1);
 
     tft.setCursor(8, DIALOGUE_Y + 6);
-    tft.print("Pakura:");
+    tft.print("Pakura:"); //keep this.
 
     tft.setCursor(8, DIALOGUE_Y + 19);
-    tft.print("\"This is a placeholder message.\"");
+    tft.print('"');
+    tft.print(currentDialogue);
+    tft.print('"');
 }
 
 // --------------------------------------------------
@@ -529,4 +584,186 @@ void drawPakura(const char* filename) {
     png.close();
 
     Serial.println("Expression loaded.");
+}
+
+// --------------------------------------------------
+// Touchscreen
+// --------------------------------------------------
+
+static uint16_t readTouchValue(uint8_t command) {
+
+    uint16_t value = 0;
+
+    for (int bit = 7; bit >= 0; --bit) {
+
+        digitalWrite(
+            TOUCH_MOSI,
+            command & (1 << bit)
+        );
+
+        digitalWrite(TOUCH_CLK, HIGH);
+        delayMicroseconds(2);
+
+        digitalWrite(TOUCH_CLK, LOW);
+        delayMicroseconds(2);
+    }
+
+    // The controller sends one null bit before the 12-bit conversion value.
+    digitalWrite(TOUCH_CLK, HIGH);
+    delayMicroseconds(2);
+    digitalWrite(TOUCH_CLK, LOW);
+    delayMicroseconds(2);
+
+    for (int bit = 11; bit >= 0; --bit) {
+
+        digitalWrite(TOUCH_CLK, HIGH);
+        delayMicroseconds(2);
+
+        value |= digitalRead(TOUCH_MISO) << bit;
+
+        digitalWrite(TOUCH_CLK, LOW);
+        delayMicroseconds(2);
+    }
+
+    return value;
+}
+
+
+static void readTouch(uint16_t &x, uint16_t &y) {
+
+    digitalWrite(TOUCH_CS, LOW);
+
+    x = readTouchValue(0xD0);
+    y = readTouchValue(0x90);
+
+    digitalWrite(TOUCH_CS, HIGH);
+}
+
+
+static int clampPixel(long value, int maximum) {
+
+    if (value < 0) {
+        return 0;
+    }
+
+    if (value > maximum) {
+        return maximum;
+    }
+
+    return static_cast<int>(value);
+}
+
+void handleTouch() {
+
+    if (digitalRead(TOUCH_IRQ) == LOW) {
+
+        uint16_t x = 0;
+        uint16_t y = 0;
+
+        readTouch(x, y);
+
+        int pixelX = clampPixel(
+            map(y, RAW_Y_LEFT, RAW_Y_RIGHT, 0, 239),
+            239
+        );
+
+        int pixelY = clampPixel(
+            map(x, RAW_X_TOP, RAW_X_BOTTOM, 0, 319),
+            319
+        );
+
+        Serial.print("TOUCH X: ");
+        Serial.print(pixelX);
+
+        Serial.print(" Y: ");
+        Serial.print(pixelY);
+
+        Serial.print(" (raw X: ");
+        Serial.print(x);
+        Serial.print(" Y: ");
+        Serial.print(y);
+        Serial.println(")");
+
+        if (pixelY >= CHARACTER_Y && pixelY < CHARACTER_Y + CHARACTER_H) {
+            unsigned long touchTime = millis();
+
+            if (touchTime - lastPakuraTouch >= TOUCH_SEQUENCE_TIMEOUT) {
+                pakuraTouchCount = 0;
+            }
+
+            lastPakuraTouch = touchTime;
+            pakuraTouchCount++;
+
+            if (pakuraTouchCount >= REQUIRED_TOUCHES) {
+                setExpression("love"); // using love.png instead of the planned blush.png because blush.png wasnt different enough from neutral.
+                loadRandomDialogue("/dialogue/blush.txt");
+                drawDialogueArea();
+                blushStartedAt = touchTime;
+                isBlushing = true;
+                pakuraTouchCount = 0;
+            }
+        }
+
+        while (digitalRead(TOUCH_IRQ) == LOW) {
+            delay(10);
+        }
+    }
+}
+
+// --------------------------------------------------
+// Blush timer
+// --------------------------------------------------
+
+void updateBlushState() {
+
+    if (isBlushing && millis() - blushStartedAt >= BLUSH_DURATION) {
+        setExpression("neutral");
+        loadRandomDialogue("/dialogue/greeting.txt");
+        drawDialogueArea();
+        isBlushing = false;
+    }
+}
+
+// --------------------------------------------------
+// Random dialogue
+// --------------------------------------------------
+
+bool loadRandomDialogue(const char* filename) {
+
+    File dialogueFile = SD.open(filename, FILE_READ);
+
+    if (!dialogueFile) {
+        Serial.print("Failed to open dialogue: ");
+        Serial.println(filename);
+        return false;
+    }
+
+    String selectedLine;
+    unsigned long lineCount = 0;
+
+    while (dialogueFile.available()) {
+        String line = dialogueFile.readStringUntil('\n');
+        line.trim();
+
+        if (line.length() == 0) {
+            continue;
+        }
+
+        lineCount++;
+
+        if (random(lineCount) == 0) {
+            selectedLine = line;
+        }
+    }
+
+    dialogueFile.close();
+
+    if (lineCount == 0) {
+        Serial.print("Dialogue is empty: ");
+        Serial.println(filename);
+        return false;
+    }
+
+    currentDialogue = selectedLine;
+    return true;
 }
