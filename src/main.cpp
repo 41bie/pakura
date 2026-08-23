@@ -69,6 +69,14 @@ const int BACK_BUTTON_Y = 0;
 const int BACK_BUTTON_W = 30;
 const int BACK_BUTTON_H = 20;
 
+const int SAT_IMAGE_X = SCREEN_WIDTH - 77;
+const int SAT_IMAGE_Y = SCREEN_HEIGHT - 97;
+
+const int MENU_DIALOGUE_X = 0;
+const int MENU_DIALOGUE_Y = SCREEN_HEIGHT - 50 - DIALOGUE_H;
+const int MENU_DIALOGUE_W = SAT_IMAGE_X;
+const int MENU_DIALOGUE_H = DIALOGUE_H;
+
 unsigned long lastTimeUpdate = 0;
 
 bool isLogScreen = false;
@@ -113,10 +121,12 @@ void drawDialogueArea();
 void drawButtonArea();
 void drawLogScreen();
 void drawMoreScreen();
+void drawMenuDialogueArea(const char* filename);
 
 void setExpression(const char* expression);
 
 void drawPakura(const char* filename);
+void drawPng(const char* filename, int imageX, int imageY);
 void *pngOpen(const char *filename, int32_t *size);
 void pngClose(void *handle);
 int32_t pngRead(PNGFILE *page, uint8_t *buffer, int32_t length);
@@ -227,6 +237,9 @@ void drawLogScreen() {
 
     tft.fillScreen(BG_COLOR);
 
+    drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
+    drawMenuDialogueArea("/dialogue/log.txt");
+
     tft.drawRect(
         BACK_BUTTON_X,
         BACK_BUTTON_Y,
@@ -247,6 +260,9 @@ void drawLogScreen() {
 void drawMoreScreen() {
 
     tft.fillScreen(BG_COLOR);
+
+    drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
+    drawMenuDialogueArea("/dialogue/more.txt");
 
     tft.drawRect(
         BACK_BUTTON_X,
@@ -441,6 +457,42 @@ void drawDialogueArea() {
 }
 
 // --------------------------------------------------
+// Secondary-menu dialogue area
+// --------------------------------------------------
+
+void drawMenuDialogueArea(const char* filename) {
+
+    loadRandomDialogue(filename);
+
+    tft.fillRect(
+        MENU_DIALOGUE_X,
+        MENU_DIALOGUE_Y,
+        MENU_DIALOGUE_W,
+        MENU_DIALOGUE_H,
+        BG_COLOR
+    );
+
+    tft.drawRect(
+        MENU_DIALOGUE_X,
+        MENU_DIALOGUE_Y,
+        MENU_DIALOGUE_W,
+        MENU_DIALOGUE_H,
+        LINE_COLOR
+    );
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+
+    tft.setCursor(MENU_DIALOGUE_X + 8, MENU_DIALOGUE_Y + 6);
+    tft.print("Pakura:");
+
+    tft.setCursor(MENU_DIALOGUE_X + 8, MENU_DIALOGUE_Y + 19);
+    tft.print('"');
+    tft.print(currentDialogue);
+    tft.print('"');
+}
+
+// --------------------------------------------------
 // Button area
 // --------------------------------------------------
 
@@ -569,6 +621,9 @@ int32_t pngSeek(
 // PNG drawing callback
 // --------------------------------------------------
 
+int pngImageX = 0;
+int pngImageY = 0;
+
 int pngDraw(PNGDRAW *pDraw) {
 
     uint16_t lineBuffer[240];
@@ -581,8 +636,8 @@ int pngDraw(PNGDRAW *pDraw) {
     );
 
     tft.pushImage(
-        0,
-        CHARACTER_Y + pDraw->y,
+        pngImageX,
+        pngImageY + pDraw->y,
         pDraw->iWidth,
         1,
         lineBuffer
@@ -618,7 +673,10 @@ void setExpression(const char* expression) {
 // Draw Pakura expression
 // --------------------------------------------------
 
-void drawPakura(const char* filename) {
+void drawPng(const char* filename, int imageX, int imageY) {
+
+    pngImageX = imageX;
+    pngImageY = imageY;
 
     Serial.print("Loading expression: ");
     Serial.println(filename);
@@ -650,6 +708,11 @@ void drawPakura(const char* filename) {
     png.close();
 
     Serial.println("Expression loaded.");
+}
+
+void drawPakura(const char* filename) {
+
+    drawPng(filename, 0, CHARACTER_Y);
 }
 
 // --------------------------------------------------
@@ -761,6 +824,7 @@ void handleTouch() {
             if (touchedBackButton) {
                 isLogScreen = false;
                 isMoreScreen = false;
+                loadRandomDialogue("/dialogue/greeting.txt");
                 drawUI();
             }
 
