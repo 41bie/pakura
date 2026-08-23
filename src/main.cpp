@@ -54,7 +54,25 @@ const int STATS_H = 60;
 const int BUTTONS_Y = 265;
 const int BUTTONS_H = 55;
 
+const int LOG_BUTTON_X = 86;
+const int LOG_BUTTON_Y = BUTTONS_Y + 9;
+const int LOG_BUTTON_W = 68;
+const int LOG_BUTTON_H = 36;
+
+const int MORE_BUTTON_X = 167;
+const int MORE_BUTTON_Y = BUTTONS_Y + 9;
+const int MORE_BUTTON_W = 68;
+const int MORE_BUTTON_H = 36;
+
+const int BACK_BUTTON_X = 0;
+const int BACK_BUTTON_Y = 0;
+const int BACK_BUTTON_W = 30;
+const int BACK_BUTTON_H = 20;
+
 unsigned long lastTimeUpdate = 0;
+
+bool isLogScreen = false;
+bool isMoreScreen = false;
 
 // --------------------------------------------------
 // Dialogue
@@ -93,6 +111,8 @@ void drawCharacterArea();
 void drawStatsArea();
 void drawDialogueArea();
 void drawButtonArea();
+void drawLogScreen();
+void drawMoreScreen();
 
 void setExpression(const char* expression);
 
@@ -162,7 +182,11 @@ void setup() {
 
 void loop() {
 
-    
+    if (isLogScreen || isMoreScreen) {
+        handleTouch();
+        return;
+    }
+
     // do to:
     // - touchscreen input
     // - character state
@@ -193,6 +217,48 @@ void drawUI() {
     drawStatsArea();
     drawDialogueArea();
     drawButtonArea();
+}
+
+// --------------------------------------------------
+// Log screen
+// --------------------------------------------------
+
+void drawLogScreen() {
+
+    tft.fillScreen(BG_COLOR);
+
+    tft.drawRect(
+        BACK_BUTTON_X,
+        BACK_BUTTON_Y,
+        BACK_BUTTON_W,
+        BACK_BUTTON_H,
+        LINE_COLOR
+    );
+
+    tft.drawLine(20, 6, 10, 10, TEXT_COLOR);
+    tft.drawLine(10, 10, 20, 14, TEXT_COLOR);
+    tft.drawLine(10, 10, 26, 10, TEXT_COLOR);
+}
+
+// --------------------------------------------------
+// More screen
+// --------------------------------------------------
+
+void drawMoreScreen() {
+
+    tft.fillScreen(BG_COLOR);
+
+    tft.drawRect(
+        BACK_BUTTON_X,
+        BACK_BUTTON_Y,
+        BACK_BUTTON_W,
+        BACK_BUTTON_H,
+        LINE_COLOR
+    );
+
+    tft.drawLine(20, 6, 10, 10, TEXT_COLOR);
+    tft.drawLine(10, 10, 20, 14, TEXT_COLOR);
+    tft.drawLine(10, 10, 26, 10, TEXT_COLOR);
 }
 
 // --------------------------------------------------
@@ -397,9 +463,9 @@ void drawButtonArea() {
     );
 
     // Button dimensions
-    const int buttonWidth = 68;
-    const int buttonHeight = 36;
-    const int buttonY = BUTTONS_Y + 9;
+    const int buttonWidth = LOG_BUTTON_W;
+    const int buttonHeight = LOG_BUTTON_H;
+    const int buttonY = LOG_BUTTON_Y;
 
     // Button 1
     tft.drawRect(
@@ -415,15 +481,15 @@ void drawButtonArea() {
 
     // Button 2
     tft.drawRect(
-        86,
+        LOG_BUTTON_X,
         buttonY,
         buttonWidth,
         buttonHeight,
         TEXT_COLOR
     );
 
-    tft.setCursor(100, buttonY + 14);
-    tft.print("STATUS");
+    tft.setCursor(LOG_BUTTON_X + 14, buttonY + 14);
+    tft.print("LOG");
 
     // Button 3
     tft.drawRect(
@@ -435,7 +501,7 @@ void drawButtonArea() {
     );
 
     tft.setCursor(184, buttonY + 14);
-    tft.print("DATA");
+    tft.print("MORE");
 }
 
 // --------------------------------------------------
@@ -684,6 +750,60 @@ void handleTouch() {
         Serial.print(" Y: ");
         Serial.print(y);
         Serial.println(")");
+
+        if (isLogScreen || isMoreScreen) {
+            bool touchedBackButton =
+                pixelX >= BACK_BUTTON_X &&
+                pixelX < BACK_BUTTON_X + BACK_BUTTON_W &&
+                pixelY >= BACK_BUTTON_Y &&
+                pixelY < BACK_BUTTON_Y + BACK_BUTTON_H;
+
+            if (touchedBackButton) {
+                isLogScreen = false;
+                isMoreScreen = false;
+                drawUI();
+            }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
+        bool touchedLogButton =
+            pixelX >= LOG_BUTTON_X &&
+            pixelX < LOG_BUTTON_X + LOG_BUTTON_W &&
+            pixelY >= LOG_BUTTON_Y &&
+            pixelY < LOG_BUTTON_Y + LOG_BUTTON_H;
+
+        if (touchedLogButton) {
+            isLogScreen = true;
+            drawLogScreen();
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
+        bool touchedMoreButton =
+            pixelX >= MORE_BUTTON_X &&
+            pixelX < MORE_BUTTON_X + MORE_BUTTON_W &&
+            pixelY >= MORE_BUTTON_Y &&
+            pixelY < MORE_BUTTON_Y + MORE_BUTTON_H;
+
+        if (touchedMoreButton) {
+            isMoreScreen = true;
+            drawMoreScreen();
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
 
         bool touchedCharacter =
             pixelY >= CHARACTER_Y && pixelY < CHARACTER_Y + CHARACTER_H;
