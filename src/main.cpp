@@ -65,6 +65,18 @@ const int MORE_BUTTON_Y = BUTTONS_Y + 9;
 const int MORE_BUTTON_W = 68;
 const int MORE_BUTTON_H = 36;
 
+const int LOG_MENU_BUTTON_X = 10;
+const int LOG_MENU_BUTTON_W = SCREEN_WIDTH - 20;
+const int LOG_MENU_BUTTON_H = 38;
+const int LOG_MENU_BUTTON_Y = 38;
+const int LOG_MENU_BUTTON_GAP = 10;
+
+const int SSID_PAGE_BUTTON_Y = SCREEN_HEIGHT - 38;
+const int SSID_PAGE_BUTTON_W = 70;
+const int SSID_PAGE_BUTTON_H = 30;
+const int SSID_PAGE_LEFT_X = 35;
+const int SSID_PAGE_RIGHT_X = SCREEN_WIDTH - 35 - SSID_PAGE_BUTTON_W;
+
 const int BACK_BUTTON_X = 0;
 const int BACK_BUTTON_Y = 0;
 const int BACK_BUTTON_W = 30;
@@ -82,6 +94,9 @@ unsigned long lastTimeUpdate = 0;
 
 bool isLogScreen = false;
 bool isMoreScreen = false;
+bool isSSIDScreen = false;
+bool isStatsScreen = false;
+int ssidPage = 0;
 
 // --------------------------------------------------
 // WiFi beacon scanning
@@ -90,9 +105,14 @@ bool isMoreScreen = false;
 const unsigned long WIFI_SCAN_INTERVAL = 60000;
 const char* SSID_FILE = "/data/ssid.csv";
 
+const unsigned long WIFI_EVENT_DURATION = 3000;
+
 unsigned long lastWiFiScan = 0;
-bool wifiScanPending = true;
 bool sdCardReady = false;
+String dialogueBeforeWiFiEvent;
+String wifiEventDialogue;
+unsigned long wifiEventEndsAt = 0;
+bool wifiEventDialogueActive = false;
 
 // --------------------------------------------------
 // Dialogue
@@ -133,7 +153,13 @@ void drawDialogueArea();
 void drawButtonArea();
 void drawLogScreen();
 void drawMoreScreen();
+void drawStatsScreen();
+void drawSSIDScreen();
 void drawMenuDialogueArea(const char* filename);
+void drawBackButton();
+void drawLogMenuButton(int y, const char* label);
+void drawSSIDPageButton(int x, const char* label);
+int loadSSIDPage(int page, int* ids, String* names);
 
 void setExpression(const char* expression);
 
@@ -150,6 +176,10 @@ void updateBlushState();
 bool loadRandomDialogue(const char* filename);
 void scanAndStoreSSIDs();
 bool appendUniqueSSID(const String& ssid);
+void drawCurrentDialogueBox();
+void beginWiFiDialogue(const char* filename);
+void finishWiFiDialogue(const char* filename);
+void updateWiFiDialogue();
 
 
 // --------------------------------------------------
@@ -210,11 +240,13 @@ void setup() {
 
 void loop() {
 
-    if (sdCardReady && (wifiScanPending || millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL)) {
+    if (sdCardReady && millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL) {
         scanAndStoreSSIDs();
     }
 
-    if (isLogScreen || isMoreScreen) {
+    updateWiFiDialogue();
+
+    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen) {
         handleTouch();
         return;
     }
@@ -259,8 +291,53 @@ void drawLogScreen() {
 
     tft.fillScreen(BG_COLOR);
 
+    drawLogMenuButton(LOG_MENU_BUTTON_Y, "SSIDs");
+    drawLogMenuButton(
+        LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP,
+        "STATS"
+    );
     drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
     drawMenuDialogueArea("/dialogue/log.txt");
+    drawBackButton();
+}
+
+void drawStatsScreen() {
+
+    tft.fillScreen(BG_COLOR);
+
+    drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
+    drawMenuDialogueArea("/dialogue/stats.txt");
+    drawBackButton();
+}
+
+void drawSSIDScreen() {
+
+    tft.fillScreen(BG_COLOR);
+
+    drawBackButton();
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor((SCREEN_WIDTH - tft.textWidth("SSIDs")) / 2, 8);
+    tft.print("SSIDs");
+
+    int ids[5] = {0, 0, 0, 0, 0};
+    String names[5];
+    int displayedCount = loadSSIDPage(ssidPage, ids, names);
+
+    for (int itemIndex = 0; itemIndex < displayedCount; itemIndex++) {
+        int y = 42 + itemIndex * 25;
+        tft.setCursor(12, y);
+        tft.print(ids[itemIndex]);
+        tft.print(". ");
+        tft.print(names[itemIndex]);
+    }
+
+    drawSSIDPageButton(SSID_PAGE_LEFT_X, "<");
+    drawSSIDPageButton(SSID_PAGE_RIGHT_X, ">");
+}
+
+void drawBackButton() {
 
     tft.drawRect(
         BACK_BUTTON_X,
@@ -273,6 +350,34 @@ void drawLogScreen() {
     tft.drawLine(20, 6, 10, 10, TEXT_COLOR);
     tft.drawLine(10, 10, 20, 14, TEXT_COLOR);
     tft.drawLine(10, 10, 26, 10, TEXT_COLOR);
+}
+
+void drawLogMenuButton(int y, const char* label) {
+
+    tft.drawRect(
+        LOG_MENU_BUTTON_X,
+        y,
+        LOG_MENU_BUTTON_W,
+        LOG_MENU_BUTTON_H,
+        TEXT_COLOR
+    );
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor(
+        (SCREEN_WIDTH - tft.textWidth(label)) / 2,
+        y + 15
+    );
+    tft.print(label);
+}
+
+void drawSSIDPageButton(int x, const char* label) {
+
+    tft.drawRect(x, SSID_PAGE_BUTTON_Y, SSID_PAGE_BUTTON_W, SSID_PAGE_BUTTON_H, TEXT_COLOR);
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(2);
+    tft.setCursor(x + 31, SSID_PAGE_BUTTON_Y + 7);
+    tft.print(label);
 }
 
 // --------------------------------------------------
@@ -474,7 +579,7 @@ void drawDialogueArea() {
 
     tft.setCursor(8, DIALOGUE_Y + 19);
     tft.print('"');
-    tft.print(currentDialogue);
+    tft.print(wifiEventDialogueActive ? wifiEventDialogue : currentDialogue);
     tft.print('"');
 }
 
@@ -510,7 +615,7 @@ void drawMenuDialogueArea(const char* filename) {
 
     tft.setCursor(MENU_DIALOGUE_X + 8, MENU_DIALOGUE_Y + 19);
     tft.print('"');
-    tft.print(currentDialogue);
+    tft.print(wifiEventDialogueActive ? wifiEventDialogue : currentDialogue);
     tft.print('"');
 }
 
@@ -836,6 +941,70 @@ void handleTouch() {
         Serial.print(y);
         Serial.println(")");
 
+        if (isSSIDScreen) {
+            bool touchedBackButton =
+                pixelX >= BACK_BUTTON_X &&
+                pixelX < BACK_BUTTON_X + BACK_BUTTON_W &&
+                pixelY >= BACK_BUTTON_Y &&
+                pixelY < BACK_BUTTON_Y + BACK_BUTTON_H;
+
+            bool touchedPreviousPage =
+                pixelX >= SSID_PAGE_LEFT_X &&
+                pixelX < SSID_PAGE_LEFT_X + SSID_PAGE_BUTTON_W &&
+                pixelY >= SSID_PAGE_BUTTON_Y &&
+                pixelY < SSID_PAGE_BUTTON_Y + SSID_PAGE_BUTTON_H;
+
+            bool touchedNextPage =
+                pixelX >= SSID_PAGE_RIGHT_X &&
+                pixelX < SSID_PAGE_RIGHT_X + SSID_PAGE_BUTTON_W &&
+                pixelY >= SSID_PAGE_BUTTON_Y &&
+                pixelY < SSID_PAGE_BUTTON_Y + SSID_PAGE_BUTTON_H;
+
+            if (touchedBackButton) {
+                isSSIDScreen = false;
+                isLogScreen = true;
+                drawLogScreen();
+            }
+            else if (touchedPreviousPage && ssidPage > 0) {
+                ssidPage--;
+                drawSSIDScreen();
+            }
+            else if (touchedNextPage) {
+                int ids[5] = {0, 0, 0, 0, 0};
+                String names[5];
+                if (loadSSIDPage(ssidPage + 1, ids, names) > 0) {
+                    ssidPage++;
+                    drawSSIDScreen();
+                }
+            }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
+        if (isStatsScreen) {
+            bool touchedBackButton =
+                pixelX >= BACK_BUTTON_X &&
+                pixelX < BACK_BUTTON_X + BACK_BUTTON_W &&
+                pixelY >= BACK_BUTTON_Y &&
+                pixelY < BACK_BUTTON_Y + BACK_BUTTON_H;
+
+            if (touchedBackButton) {
+                isStatsScreen = false;
+                isLogScreen = true;
+                drawLogScreen();
+            }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
         if (isLogScreen || isMoreScreen) {
             bool touchedBackButton =
                 pixelX >= BACK_BUTTON_X &&
@@ -848,6 +1017,32 @@ void handleTouch() {
                 isMoreScreen = false;
                 loadRandomDialogue("/dialogue/greeting.txt");
                 drawUI();
+            }
+
+            if (isLogScreen) {
+                bool touchedSSIDButton =
+                    pixelX >= LOG_MENU_BUTTON_X &&
+                    pixelX < LOG_MENU_BUTTON_X + LOG_MENU_BUTTON_W &&
+                    pixelY >= LOG_MENU_BUTTON_Y &&
+                    pixelY < LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H;
+
+                bool touchedStatsButton =
+                    pixelX >= LOG_MENU_BUTTON_X &&
+                    pixelX < LOG_MENU_BUTTON_X + LOG_MENU_BUTTON_W &&
+                    pixelY >= LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP &&
+                    pixelY < LOG_MENU_BUTTON_Y + 2 * LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP;
+
+                if (touchedSSIDButton) {
+                    isLogScreen = false;
+                    isSSIDScreen = true;
+                    ssidPage = 0;
+                    drawSSIDScreen();
+                }
+                else if (touchedStatsButton) {
+                    isLogScreen = false;
+                    isStatsScreen = true;
+                    drawStatsScreen();
+                }
             }
 
             while (digitalRead(TOUCH_IRQ) == LOW) {
@@ -982,6 +1177,66 @@ bool loadRandomDialogue(const char* filename) {
     return true;
 }
 
+void drawCurrentDialogueBox() {
+
+    if (isSSIDScreen) {
+        return;
+    }
+
+    if (isLogScreen) {
+        drawMenuDialogueArea("/dialogue/log.txt");
+    }
+    else if (isStatsScreen) {
+        drawMenuDialogueArea("/dialogue/stats.txt");
+    }
+    else if (isMoreScreen) {
+        drawMenuDialogueArea("/dialogue/more.txt");
+    }
+    else {
+        drawDialogueArea();
+    }
+}
+
+void beginWiFiDialogue(const char* filename) {
+
+    dialogueBeforeWiFiEvent = currentDialogue;
+    wifiEventDialogueActive = false;
+
+    if (loadRandomDialogue(filename)) {
+        wifiEventDialogue = currentDialogue;
+        wifiEventDialogueActive = true;
+        drawCurrentDialogueBox();
+    }
+}
+
+void finishWiFiDialogue(const char* filename) {
+
+    if (loadRandomDialogue(filename)) {
+        wifiEventDialogue = currentDialogue;
+        wifiEventDialogueActive = true;
+        wifiEventEndsAt = millis() + WIFI_EVENT_DURATION;
+        drawCurrentDialogueBox();
+    }
+    else {
+        wifiEventDialogueActive = false;
+    }
+}
+
+void updateWiFiDialogue() {
+
+    if (wifiEventDialogueActive &&
+        static_cast<long>(millis() - wifiEventEndsAt) >= 0) {
+        wifiEventDialogueActive = false;
+        currentDialogue = dialogueBeforeWiFiEvent;
+
+        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+            setExpression("neutral");
+        }
+
+        drawCurrentDialogueBox();
+    }
+}
+
 // --------------------------------------------------
 // WiFi beacon scanning
 // --------------------------------------------------
@@ -989,28 +1244,44 @@ bool loadRandomDialogue(const char* filename) {
 void scanAndStoreSSIDs() {
 
     lastWiFiScan = millis();
-    wifiScanPending = false;
+    bool scanStartedOnMainMenu =
+        !isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen;
+
+    if (scanStartedOnMainMenu) {
+        setExpression("surprised");
+    }
+
+    beginWiFiDialogue("/dialogue/scan.txt");
 
     Serial.println("Scanning for SSIDs...");
     int networkCount = WiFi.scanNetworks(false, true);
+    bool hasNewSSID = false;
 
     if (networkCount < 0) {
         Serial.println("WiFi scan failed");
-        return;
     }
 
-    for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
-        String ssid = WiFi.SSID(networkIndex);
+    else {
+        for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
+            String ssid = WiFi.SSID(networkIndex);
 
-        if (ssid.length() > 0) {
-            appendUniqueSSID(ssid);
+            if (ssid.length() > 0 && appendUniqueSSID(ssid)) {
+                hasNewSSID = true;
+            }
         }
+
+        WiFi.scanDelete();
     }
 
-    WiFi.scanDelete();
     Serial.print("WiFi scan complete: ");
     Serial.print(networkCount);
     Serial.println(" networks found");
+
+    if (scanStartedOnMainMenu) {
+        setExpression(hasNewSSID ? "happy" : "sad");
+    }
+
+    finishWiFiDialogue(hasNewSSID ? "/dialogue/newssid.txt" : "/dialogue/oldssid.txt");
 }
 
 bool appendUniqueSSID(const String& ssid) {
@@ -1064,4 +1335,75 @@ bool appendUniqueSSID(const String& ssid) {
     Serial.print(": ");
     Serial.println(ssid);
     return true;
+}
+
+int loadSSIDPage(int page, int* ids, String* names) {
+
+    File ssidFile = SD.open(SSID_FILE, FILE_READ);
+
+    if (!ssidFile) {
+        return 0;
+    }
+
+    int recordCount = 0;
+
+    while (ssidFile.available()) {
+        String line = ssidFile.readStringUntil('\n');
+
+        if (line.endsWith("\r")) {
+            line.remove(line.length() - 1);
+        }
+
+        int separatorIndex = line.indexOf(',');
+        if (separatorIndex >= 0 && line.substring(separatorIndex + 1).length() > 0) {
+            recordCount++;
+        }
+    }
+
+    int firstRecord = recordCount - ((page + 1) * 5);
+    if (firstRecord < 0) {
+        firstRecord = 0;
+    }
+
+    int lastRecord = recordCount - (page * 5);
+    if (lastRecord > recordCount) {
+        lastRecord = recordCount;
+    }
+
+    ssidFile.seek(0);
+    int recordIndex = 0;
+    int selectedIds[5] = {0, 0, 0, 0, 0};
+    String selectedNames[5];
+
+    while (ssidFile.available() && recordIndex < lastRecord) {
+        String line = ssidFile.readStringUntil('\n');
+
+        if (line.endsWith("\r")) {
+            line.remove(line.length() - 1);
+        }
+
+        int separatorIndex = line.indexOf(',');
+        if (separatorIndex < 0 || line.substring(separatorIndex + 1).length() == 0) {
+            continue;
+        }
+
+        if (recordIndex >= firstRecord) {
+            int slot = recordIndex - firstRecord;
+            selectedIds[slot] = line.substring(0, separatorIndex).toInt();
+            selectedNames[slot] = line.substring(separatorIndex + 1);
+        }
+
+        recordIndex++;
+    }
+
+    ssidFile.close();
+
+    int displayedCount = lastRecord - firstRecord;
+    for (int itemIndex = 0; itemIndex < displayedCount; itemIndex++) {
+        int sourceIndex = displayedCount - 1 - itemIndex;
+        ids[itemIndex] = selectedIds[sourceIndex];
+        names[itemIndex] = selectedNames[sourceIndex];
+    }
+
+    return displayedCount;
 }
