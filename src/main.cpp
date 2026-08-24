@@ -4,6 +4,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <PNGdec.h>
+#include <WiFi.h>
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -83,6 +84,17 @@ bool isLogScreen = false;
 bool isMoreScreen = false;
 
 // --------------------------------------------------
+// WiFi beacon scanning
+// --------------------------------------------------
+
+const unsigned long WIFI_SCAN_INTERVAL = 60000;
+const char* SSID_FILE = "/data/ssid.csv";
+
+unsigned long lastWiFiScan = 0;
+bool wifiScanPending = true;
+bool sdCardReady = false;
+
+// --------------------------------------------------
 // Dialogue
 // --------------------------------------------------
 
@@ -136,6 +148,8 @@ int pngDraw(PNGDRAW *pDraw);
 void handleTouch();
 void updateBlushState();
 bool loadRandomDialogue(const char* filename);
+void scanAndStoreSSIDs();
+bool appendUniqueSSID(const String& ssid);
 
 
 // --------------------------------------------------
@@ -175,10 +189,14 @@ void setup() {
         Serial.println("SD CARD FAILED");
     }
     else {
+        sdCardReady = true;
         Serial.println("SD CARD INITIALIZED");
         randomSeed(micros() ^ analogRead(34));
         loadRandomDialogue("/dialogue/greeting.txt");
     }
+
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
 
     // Draw the interface
     drawUI();
@@ -191,6 +209,10 @@ void setup() {
 // --------------------------------------------------
 
 void loop() {
+
+    if (sdCardReady && (wifiScanPending || millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL)) {
+        scanAndStoreSSIDs();
+    }
 
     if (isLogScreen || isMoreScreen) {
         handleTouch();
@@ -957,5 +979,89 @@ bool loadRandomDialogue(const char* filename) {
     }
 
     currentDialogue = selectedLine;
+    return true;
+}
+
+// --------------------------------------------------
+// WiFi beacon scanning
+// --------------------------------------------------
+
+void scanAndStoreSSIDs() {
+
+    lastWiFiScan = millis();
+    wifiScanPending = false;
+
+    Serial.println("Scanning for SSIDs...");
+    int networkCount = WiFi.scanNetworks(false, true);
+
+    if (networkCount < 0) {
+        Serial.println("WiFi scan failed");
+        return;
+    }
+
+    for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
+        String ssid = WiFi.SSID(networkIndex);
+
+        if (ssid.length() > 0) {
+            appendUniqueSSID(ssid);
+        }
+    }
+
+    WiFi.scanDelete();
+    Serial.print("WiFi scan complete: ");
+    Serial.print(networkCount);
+    Serial.println(" networks found");
+}
+
+bool appendUniqueSSID(const String& ssid) {
+
+    File ssidFile = SD.open(SSID_FILE, FILE_READ);
+    int nextId = 1;
+
+    if (ssidFile) {
+        while (ssidFile.available()) {
+            String line = ssidFile.readStringUntil('\n');
+
+            if (line.endsWith("\r")) {
+                line.remove(line.length() - 1);
+            }
+
+            int separatorIndex = line.indexOf(',');
+
+            if (separatorIndex < 0) {
+                continue;
+            }
+
+            int storedId = line.substring(0, separatorIndex).toInt();
+            if (storedId >= nextId) {
+                nextId = storedId + 1;
+            }
+
+            if (line.substring(separatorIndex + 1) == ssid) {
+                ssidFile.close();
+                return false;
+            }
+        }
+
+        ssidFile.close();
+    }
+
+    ssidFile = SD.open(SSID_FILE, FILE_APPEND);
+
+    if (!ssidFile) {
+        Serial.print("Failed to open SSID file: ");
+        Serial.println(SSID_FILE);
+        return false;
+    }
+
+    ssidFile.print(nextId);
+    ssidFile.print(',');
+    ssidFile.println(ssid);
+    ssidFile.close();
+
+    Serial.print("Stored SSID ");
+    Serial.print(nextId);
+    Serial.print(": ");
+    Serial.println(ssid);
     return true;
 }
