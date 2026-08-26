@@ -321,12 +321,12 @@ void drawSSIDScreen() {
     tft.setCursor((SCREEN_WIDTH - tft.textWidth("SSIDs")) / 2, 8);
     tft.print("SSIDs");
 
-    int ids[5] = {0, 0, 0, 0, 0};
-    String names[5];
+    int ids[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    String names[10];
     int displayedCount = loadSSIDPage(ssidPage, ids, names);
 
     for (int itemIndex = 0; itemIndex < displayedCount; itemIndex++) {
-        int y = 42 + itemIndex * 25;
+        int y = 42 + itemIndex * 18;
         tft.setCursor(12, y);
         tft.print(ids[itemIndex]);
         tft.print(". ");
@@ -970,8 +970,8 @@ void handleTouch() {
                 drawSSIDScreen();
             }
             else if (touchedNextPage) {
-                int ids[5] = {0, 0, 0, 0, 0};
-                String names[5];
+                int ids[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                String names[10];
                 if (loadSSIDPage(ssidPage + 1, ids, names) > 0) {
                     ssidPage++;
                     drawSSIDScreen();
@@ -1360,20 +1360,21 @@ int loadSSIDPage(int page, int* ids, String* names) {
         }
     }
 
-    int firstRecord = recordCount - ((page + 1) * 5);
+    const int PAGE_SIZE = 10;
+    int firstRecord = recordCount - ((page + 1) * PAGE_SIZE);
     if (firstRecord < 0) {
         firstRecord = 0;
     }
 
-    int lastRecord = recordCount - (page * 5);
+    int lastRecord = recordCount - (page * PAGE_SIZE);
     if (lastRecord > recordCount) {
         lastRecord = recordCount;
     }
 
     ssidFile.seek(0);
     int recordIndex = 0;
-    int selectedIds[5] = {0, 0, 0, 0, 0};
-    String selectedNames[5];
+    int selectedIds[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    String selectedNames[10];
 
     while (ssidFile.available() && recordIndex < lastRecord) {
         String line = ssidFile.readStringUntil('\n');
