@@ -5,6 +5,7 @@
 #include <SD.h>
 #include <PNGdec.h>
 #include <WiFi.h>
+#include <ArduinoJson.h>
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -99,11 +100,13 @@ bool isStatsScreen = false;
 int ssidPage = 0;
 
 // --------------------------------------------------
-// WiFi beacon scanning
+// WiFi beacon scanning + Stats
 // --------------------------------------------------
 
 const unsigned long WIFI_SCAN_INTERVAL = 60000;
 const char* SSID_FILE = "/data/ssid.csv";
+const char* STATS_FILE = "/stats.json";
+const char* STATS_TEMP_FILE = "/stats.json.tmp";
 
 const unsigned long WIFI_EVENT_DURATION = 3000;
 
@@ -113,6 +116,11 @@ String dialogueBeforeWiFiEvent;
 String wifiEventDialogue;
 unsigned long wifiEventEndsAt = 0;
 bool wifiEventDialogueActive = false;
+
+int happiness = 50;
+int energy = 60;
+int experience = 0;
+int pakuraLevel = 1;
 
 // --------------------------------------------------
 // Dialogue
@@ -160,6 +168,10 @@ void drawBackButton();
 void drawLogMenuButton(int y, const char* label);
 void drawSSIDPageButton(int x, const char* label);
 int loadSSIDPage(int page, int* ids, String* names);
+bool loadStats();
+bool saveStats();
+void updateStats(int newSSIDCount);
+void drawStatBar(int y, const char* label, int value);
 
 void setExpression(const char* expression);
 
@@ -222,6 +234,7 @@ void setup() {
         sdCardReady = true;
         Serial.println("SD CARD INITIALIZED");
         randomSeed(micros() ^ analogRead(34));
+        loadStats();
         loadRandomDialogue("/dialogue/greeting.txt");
     }
 
@@ -471,7 +484,8 @@ void drawStatusBar() {
     // -----------------------------
 
     tft.setCursor(205, 6);
-    tft.print("Lv1");
+    tft.print("Lv");
+    tft.print(pakuraLevel);
 }
 
 // --------------------------------------------------
@@ -518,35 +532,26 @@ void drawStatsArea() {
     tft.setTextColor(TEXT_COLOR, BG_COLOR);
     tft.setTextSize(1);
 
-    // Happiness
-    tft.setCursor(8, STATS_Y + 8);
-    tft.print("HAPPINESS");
+    drawStatBar(STATS_Y + 8, "HAPPINESS", happiness);
+    drawStatBar(STATS_Y + 25, "ENERGY", energy);
+    drawStatBar(STATS_Y + 42, "EXPERIENCE", experience);
+}
 
-    tft.setCursor(85, STATS_Y + 8);
-    tft.print("[########--]");
+void drawStatBar(int y, const char* label, int value) {
 
-    tft.setCursor(190, STATS_Y + 8);
-    tft.print("80");
+    char bar[13] = "[----------]";
+    int filled = value / 10;
 
-    // Energy
-    tft.setCursor(8, STATS_Y + 25);
-    tft.print("ENERGY");
+    for (int index = 0; index < filled; index++) {
+        bar[index + 1] = '#';
+    }
 
-    tft.setCursor(85, STATS_Y + 25);
-    tft.print("[######----]");
-
-    tft.setCursor(190, STATS_Y + 25);
-    tft.print("60");
-
-    // XP
-    tft.setCursor(8, STATS_Y + 42);
-    tft.print("EXPERIENCE");
-
-    tft.setCursor(85, STATS_Y + 42);
-    tft.print("[###-------]");
-
-    tft.setCursor(190, STATS_Y + 42);
-    tft.print("30");
+    tft.setCursor(8, y);
+    tft.print(label);
+    tft.setCursor(85, y);
+    tft.print(bar);
+    tft.setCursor(190, y);
+    tft.print(value);
 }
 
 // --------------------------------------------------
@@ -1177,6 +1182,91 @@ bool loadRandomDialogue(const char* filename) {
     return true;
 }
 
+bool loadStats() {
+
+    File statsFile = SD.open(STATS_FILE, FILE_READ);
+
+    if (!statsFile) {
+        Serial.println("Stats file not found; using defaults");
+        return false;
+    }
+
+    JsonDocument document;
+    DeserializationError error = deserializeJson(document, statsFile);
+    statsFile.close();
+
+    if (error) {
+        Serial.print("Failed to read stats: ");
+        Serial.println(error.c_str());
+        return false;
+    }
+
+    happiness = constrain(document["happiness"] | 50, 0, 100);
+    energy = constrain(document["energy"] | 60, 0, 100);
+    experience = constrain(document["xp"] | 0, 0, 99);
+    pakuraLevel = max(1, document["level"] | 1);
+
+    Serial.println("Stats loaded");
+    return true;
+}
+
+bool saveStats() {
+
+    File statsFile = SD.open(STATS_TEMP_FILE, FILE_WRITE);
+
+    if (!statsFile) {
+        Serial.println("Failed to open temporary stats file");
+        return false;
+    }
+
+    JsonDocument document;
+    document["happiness"] = happiness;
+    document["energy"] = energy;
+    document["xp"] = experience;
+    document["level"] = pakuraLevel;
+
+    bool writeSucceeded = serializeJson(document, statsFile) > 0;
+    statsFile.close();
+
+    if (!writeSucceeded) {
+        SD.remove(STATS_TEMP_FILE);
+        Serial.println("Failed to write stats");
+        return false;
+    }
+
+    SD.remove(STATS_FILE);
+    if (!SD.rename(STATS_TEMP_FILE, STATS_FILE)) {
+        Serial.println("Failed to replace stats file");
+        return false;
+    }
+
+    Serial.println("Stats saved");
+    return true;
+}
+
+void updateStats(int newSSIDCount) {
+
+    happiness = constrain(
+        happiness + (newSSIDCount > 0 ? 3 : -2),
+        0,
+        100
+    );
+    energy = constrain(energy - 1, 0, 100);
+    experience += newSSIDCount * 2;
+
+    while (experience >= 100) {
+        experience -= 100;
+        pakuraLevel++;
+    }
+
+    saveStats();
+
+    if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+        drawStatusBar();
+        drawStatsArea();
+    }
+}
+
 void drawCurrentDialogueBox() {
 
     if (isSSIDScreen) {
@@ -1255,6 +1345,7 @@ void scanAndStoreSSIDs() {
 
     Serial.println("Scanning for SSIDs...");
     int networkCount = WiFi.scanNetworks(false, true);
+    int newSSIDCount = 0;
     bool hasNewSSID = false;
 
     if (networkCount < 0) {
@@ -1267,6 +1358,7 @@ void scanAndStoreSSIDs() {
 
             if (ssid.length() > 0 && appendUniqueSSID(ssid)) {
                 hasNewSSID = true;
+                newSSIDCount++;
             }
         }
 
@@ -1282,6 +1374,7 @@ void scanAndStoreSSIDs() {
     }
 
     finishWiFiDialogue(hasNewSSID ? "/dialogue/newssid.txt" : "/dialogue/oldssid.txt");
+    updateStats(newSSIDCount);
 }
 
 bool appendUniqueSSID(const String& ssid) {
