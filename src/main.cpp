@@ -97,6 +97,7 @@ bool isLogScreen = false;
 bool isMoreScreen = false;
 bool isSSIDScreen = false;
 bool isStatsScreen = false;
+bool isInteractScreen = false;
 int ssidPage = 0;
 
 // --------------------------------------------------
@@ -116,6 +117,12 @@ String dialogueBeforeWiFiEvent;
 String wifiEventDialogue;
 unsigned long wifiEventEndsAt = 0;
 bool wifiEventDialogueActive = false;
+bool isSleeping = false;
+unsigned long lastSleepRecovery = 0;
+
+const unsigned long CHAT_DURATION = 3000;
+unsigned long chatEndsAt = 0;
+bool chatActive = false;
 
 int happiness = 50;
 int energy = 60;
@@ -169,6 +176,7 @@ void drawLogScreen();
 void drawMoreScreen();
 void drawStatsScreen();
 void drawStatsSummary();
+void drawInteractScreen();
 void drawSSIDScreen();
 void drawMenuDialogueArea(const char* filename);
 void drawBackButton();
@@ -199,6 +207,10 @@ void drawCurrentDialogueBox();
 void beginWiFiDialogue(const char* filename);
 void finishWiFiDialogue(const char* filename);
 void updateWiFiDialogue();
+void updateChat();
+void updateSleep();
+void startChat();
+void toggleSleep();
 
 
 // --------------------------------------------------
@@ -260,13 +272,15 @@ void setup() {
 
 void loop() {
 
-    if (sdCardReady && millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL) {
+    if (sdCardReady && !isSleeping && millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL) {
         scanAndStoreSSIDs();
     }
 
     updateWiFiDialogue();
+    updateChat();
+    updateSleep();
 
-    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen) {
+    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen || isInteractScreen) {
         handleTouch();
         return;
     }
@@ -327,6 +341,28 @@ void drawStatsScreen() {
 
     drawStatsSummary();
     drawBackButton();
+}
+
+void drawInteractScreen() {
+
+    tft.fillRect(0, BUTTONS_Y, SCREEN_WIDTH, BUTTONS_H, BG_COLOR);
+    tft.drawRect(0, BUTTONS_Y, SCREEN_WIDTH, BUTTONS_H, LINE_COLOR);
+
+    const int buttonY = LOG_BUTTON_Y;
+    const int buttonWidth = LOG_BUTTON_W;
+    const int buttonHeight = LOG_BUTTON_H;
+    const int buttonX[] = {5, LOG_BUTTON_X, MORE_BUTTON_X};
+    const char* labels[] = {"CHAT", "SLEEP", "BACK"};
+    const int textOffsets[] = {12, 13, 14};
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+
+    for (int index = 0; index < 3; index++) {
+        tft.drawRect(buttonX[index], buttonY, buttonWidth, buttonHeight, TEXT_COLOR);
+        tft.setCursor(buttonX[index] + textOffsets[index], buttonY + 14);
+        tft.print(labels[index]);
+    }
 }
 
 void drawStatsSummary() {
@@ -550,8 +586,7 @@ void drawCharacterArea() {
         BG_COLOR
     );
 
-    // Draw Pakura's neutral expression
-    setExpression("neutral");
+    setExpression(isSleeping ? "sleep" : "neutral");
 }
 
 // --------------------------------------------------
@@ -645,7 +680,12 @@ void drawDialogueArea() {
 
 void drawMenuDialogueArea(const char* filename) {
 
-    loadRandomDialogue(filename);
+    if (isSleeping) {
+        loadRandomDialogue("/dialogue/sleep.txt");
+    }
+    else {
+        loadRandomDialogue(filename);
+    }
 
     tft.fillRect(
         MENU_DIALOGUE_X,
@@ -716,7 +756,7 @@ void drawButtonArea() {
     );
 
     tft.setCursor(18, buttonY + 14);
-    tft.print("TALK");
+    tft.print("INTERACT");
 
     // Button 2
     tft.drawRect(
@@ -1077,6 +1117,50 @@ void handleTouch() {
             return;
         }
 
+        if (isInteractScreen) {
+            if (chatActive) {
+                while (digitalRead(TOUCH_IRQ) == LOW) {
+                    delay(10);
+                }
+
+                return;
+            }
+
+            bool touchedChatButton =
+                pixelX >= 5 && pixelX < 5 + LOG_BUTTON_W &&
+                pixelY >= LOG_BUTTON_Y &&
+                pixelY < LOG_BUTTON_Y + LOG_BUTTON_H;
+
+            bool touchedSleepButton =
+                pixelX >= LOG_BUTTON_X &&
+                pixelX < LOG_BUTTON_X + LOG_BUTTON_W &&
+                pixelY >= LOG_BUTTON_Y &&
+                pixelY < LOG_BUTTON_Y + LOG_BUTTON_H;
+
+            bool touchedInteractBackButton =
+                pixelX >= MORE_BUTTON_X &&
+                pixelX < MORE_BUTTON_X + MORE_BUTTON_W &&
+                pixelY >= MORE_BUTTON_Y &&
+                pixelY < MORE_BUTTON_Y + MORE_BUTTON_H;
+
+            if (touchedChatButton) {
+                startChat();
+            }
+            else if (touchedSleepButton) {
+                toggleSleep();
+            }
+            else if (touchedInteractBackButton) {
+                isInteractScreen = false;
+                drawButtonArea();
+            }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
         if (isLogScreen || isMoreScreen) {
             bool touchedBackButton =
                 pixelX >= BACK_BUTTON_X &&
@@ -1087,7 +1171,9 @@ void handleTouch() {
             if (touchedBackButton) {
                 isLogScreen = false;
                 isMoreScreen = false;
-                loadRandomDialogue("/dialogue/greeting.txt");
+                loadRandomDialogue(
+                    isSleeping ? "/dialogue/sleep.txt" : "/dialogue/greeting.txt"
+                );
                 drawUI();
             }
 
@@ -1116,6 +1202,23 @@ void handleTouch() {
                     drawStatsScreen();
                 }
             }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+
+        bool touchedInteractButton =
+            pixelX >= 5 &&
+            pixelX < 5 + LOG_BUTTON_W &&
+            pixelY >= LOG_BUTTON_Y &&
+            pixelY < LOG_BUTTON_Y + LOG_BUTTON_H;
+
+        if (touchedInteractButton) {
+            isInteractScreen = true;
+            drawInteractScreen();
 
             while (digitalRead(TOUCH_IRQ) == LOW) {
                 delay(10);
@@ -1165,7 +1268,7 @@ void handleTouch() {
             pakuraTouchCount = 0;
         }
 
-        if (touchedCharacter && !isBlushing) {
+        if (touchedCharacter && !isBlushing && !isSleeping) {
             unsigned long touchTime = millis();
 
 
@@ -1205,6 +1308,92 @@ void updateBlushState() {
         loadRandomDialogue("/dialogue/greeting.txt");
         drawDialogueArea();
         isBlushing = false;
+    }
+}
+
+// --------------------------------------------------
+// Interaction actions
+// --------------------------------------------------
+
+void startChat() {
+
+    if (isSleeping) {
+        isInteractScreen = false;
+        drawButtonArea();
+        return;
+    }
+
+    const char* dialogueFile = "/dialogue/hmid.txt";
+    const char* expression = "happy";
+
+    if (happiness <= 9) {
+        dialogueFile = "/dialogue/hcritical.txt";
+        expression = "cry";
+    }
+    else if (happiness <= 39) {
+        dialogueFile = "/dialogue/hlow.txt";
+        expression = "sad";
+    }
+    else if (happiness >= 80) {
+        dialogueFile = "/dialogue/hhigh.txt";
+        expression = "laugh";
+    }
+
+    loadRandomDialogue(dialogueFile);
+    setExpression(expression);
+    drawDialogueArea();
+    chatEndsAt = millis() + CHAT_DURATION;
+    chatActive = true;
+}
+
+void toggleSleep() {
+
+    isSleeping = !isSleeping;
+    isInteractScreen = false;
+    lastSleepRecovery = millis();
+
+    if (isSleeping) {
+        loadRandomDialogue("/dialogue/sleep.txt");
+    }
+    else {
+        loadRandomDialogue("/dialogue/greeting.txt");
+    }
+
+    drawUI();
+}
+
+void updateChat() {
+
+    if (chatActive && static_cast<long>(millis() - chatEndsAt) >= 0) {
+        chatActive = false;
+        setExpression(isSleeping ? "sleep" : "neutral");
+        if (!isSleeping) {
+            loadRandomDialogue("/dialogue/greeting.txt");
+        }
+        drawDialogueArea();
+        isInteractScreen = false;
+        drawButtonArea();
+    }
+}
+
+void updateSleep() {
+
+    if (!isSleeping) {
+        return;
+    }
+
+    while (millis() - lastSleepRecovery >= WIFI_SCAN_INTERVAL) {
+        lastSleepRecovery += WIFI_SCAN_INTERVAL;
+        energy = constrain(energy + 5, 0, 100);
+        totalEnergyGained += 5;
+        saveStats();
+
+        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+            drawStatsArea();
+        }
+        else if (isStatsScreen) {
+            drawStatsSummary();
+        }
     }
 }
 
