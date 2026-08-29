@@ -105,8 +105,8 @@ int ssidPage = 0;
 
 const unsigned long WIFI_SCAN_INTERVAL = 60000;
 const char* SSID_FILE = "/data/ssid.csv";
-const char* STATS_FILE = "/stats.json";
-const char* STATS_TEMP_FILE = "/stats.json.tmp";
+const char* STATS_FILE = "/data/stats.json";
+const char* STATS_TEMP_FILE = "/data/stats.json.tmp";
 
 const unsigned long WIFI_EVENT_DURATION = 3000;
 
@@ -121,6 +121,12 @@ int happiness = 50;
 int energy = 60;
 int experience = 0;
 int pakuraLevel = 1;
+unsigned long totalUniqueSSIDs = 0;
+unsigned long totalScans = 0;
+unsigned long totalHappinessGained = 0;
+unsigned long totalEnergyGained = 0;
+unsigned long totalXPGained = 0;
+unsigned long totalHeadpats = 0;
 
 // --------------------------------------------------
 // Dialogue
@@ -162,6 +168,7 @@ void drawButtonArea();
 void drawLogScreen();
 void drawMoreScreen();
 void drawStatsScreen();
+void drawStatsSummary();
 void drawSSIDScreen();
 void drawMenuDialogueArea(const char* filename);
 void drawBackButton();
@@ -318,9 +325,45 @@ void drawStatsScreen() {
 
     tft.fillScreen(BG_COLOR);
 
-    drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
-    drawMenuDialogueArea("/dialogue/stats.txt");
+    drawStatsSummary();
     drawBackButton();
+}
+
+void drawStatsSummary() {
+
+    const char* title = "STATS";
+    const int firstRowY = 42;
+    const int rowHeight = 30;
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor((SCREEN_WIDTH - tft.textWidth(title)) / 2, 8);
+    tft.print(title);
+
+    const char* labels[] = {
+        "Total Unique SSIDs:",
+        "Total Scans:",
+        "Total Happiness Gained:",
+        "Total Energy Gained:",
+        "Total XP Gained:",
+        "Total Headpats:"
+    };
+    const unsigned long values[] = {
+        totalUniqueSSIDs,
+        totalScans,
+        totalHappinessGained,
+        totalEnergyGained,
+        totalXPGained,
+        totalHeadpats
+    };
+
+    for (int index = 0; index < 6; index++) {
+        int y = firstRowY + index * rowHeight;
+        tft.setCursor(8, y);
+        tft.print(labels[index]);
+        tft.setCursor(190, y);
+        tft.print(values[index]);
+    }
 }
 
 void drawSSIDScreen() {
@@ -1125,6 +1168,7 @@ void handleTouch() {
         if (touchedCharacter && !isBlushing) {
             unsigned long touchTime = millis();
 
+
             if (touchTime - lastPakuraTouch >= TOUCH_SEQUENCE_TIMEOUT) {
                 pakuraTouchCount = 0;
             }
@@ -1138,6 +1182,8 @@ void handleTouch() {
                 drawDialogueArea();
                 blushStartedAt = touchTime;
                 isBlushing = true;
+                totalHeadpats++;
+                saveStats();
                 pakuraTouchCount = 0;
             }
         }
@@ -1219,12 +1265,14 @@ bool loadStats() {
     File statsFile = SD.open(STATS_FILE, FILE_READ);
 
     if (!statsFile) {
-        Serial.println("Stats file not found; using defaults");
+        Serial.print("Stats file not found: ");
+        Serial.println(STATS_FILE);
         return false;
     }
 
     JsonDocument document;
     DeserializationError error = deserializeJson(document, statsFile);
+    size_t statsFileSize = statsFile.size();
     statsFile.close();
 
     if (error) {
@@ -1233,12 +1281,37 @@ bool loadStats() {
         return false;
     }
 
-    happiness = constrain(document["happiness"] | 50, 0, 100);
-    energy = constrain(document["energy"] | 60, 0, 100);
-    experience = constrain(document["xp"] | 0, 0, 99);
-    pakuraLevel = max(1, document["level"] | 1);
+    if (!document["happiness"].is<int>() ||
+        !document["energy"].is<int>() ||
+        !document["xp"].is<int>() ||
+        !document["level"].is<int>()) {
+        Serial.println("Stats file is missing a required value; using defaults");
+        return false;
+    }
 
-    Serial.println("Stats loaded");
+    happiness = constrain(document["happiness"].as<int>(), 0, 100);
+    energy = constrain(document["energy"].as<int>(), 0, 100);
+    experience = constrain(document["xp"].as<int>(), 0, 99);
+    pakuraLevel = max(1, document["level"].as<int>());
+    totalUniqueSSIDs = document["totalUniqueSSIDs"] | 0UL;
+    totalScans = document["totalScans"] | 0UL;
+    totalHappinessGained = document["totalHappinessGained"] | 0UL;
+    totalEnergyGained = document["totalEnergyGained"] | 0UL;
+    totalXPGained = document["totalXPGained"] | 0UL;
+    totalHeadpats = document["totalHeadpats"] | 0UL;
+
+    Serial.print("Stats loaded from ");
+    Serial.print(STATS_FILE);
+    Serial.print(" (");
+    Serial.print(statsFileSize);
+    Serial.print(" bytes): happiness=");
+    Serial.print(happiness);
+    Serial.print(", energy=");
+    Serial.print(energy);
+    Serial.print(", xp=");
+    Serial.print(experience);
+    Serial.print(", level=");
+    Serial.println(pakuraLevel);
     return true;
 }
 
@@ -1256,6 +1329,12 @@ bool saveStats() {
     document["energy"] = energy;
     document["xp"] = experience;
     document["level"] = pakuraLevel;
+    document["totalUniqueSSIDs"] = totalUniqueSSIDs;
+    document["totalScans"] = totalScans;
+    document["totalHappinessGained"] = totalHappinessGained;
+    document["totalEnergyGained"] = totalEnergyGained;
+    document["totalXPGained"] = totalXPGained;
+    document["totalHeadpats"] = totalHeadpats;
 
     bool writeSucceeded = serializeJson(document, statsFile) > 0;
     statsFile.close();
@@ -1277,6 +1356,14 @@ bool saveStats() {
 }
 
 void updateStats(int newSSIDCount) {
+
+    totalScans++;
+    totalUniqueSSIDs += newSSIDCount;
+    totalXPGained += newSSIDCount * 2;
+
+    if (newSSIDCount > 0) {
+        totalHappinessGained += 3;
+    }
 
     happiness = constrain(
         happiness + (newSSIDCount > 0 ? 3 : -2),
