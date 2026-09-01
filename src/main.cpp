@@ -97,6 +97,10 @@ bool isLogScreen = false;
 bool isMoreScreen = false;
 bool isSSIDScreen = false;
 bool isStatsScreen = false;
+#ifdef PAKURA_DEBUG
+bool isDebugScreen = false;
+bool debugConfirmReset = false;
+#endif
 bool isInteractScreen = false;
 int ssidPage = 0;
 
@@ -174,6 +178,11 @@ void drawDialogueArea();
 void drawButtonArea();
 void drawLogScreen();
 void drawMoreScreen();
+#ifdef PAKURA_DEBUG
+void drawDebugScreen();
+void drawDebugStatRow(int y, const char* label, int value);
+void resetStatsToDefault();
+#endif
 void drawStatsScreen();
 void drawStatsSummary();
 void drawInteractScreen();
@@ -280,7 +289,11 @@ void loop() {
     updateChat();
     updateSleep();
 
-    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen || isInteractScreen) {
+    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen || isInteractScreen
+#ifdef PAKURA_DEBUG
+        || isDebugScreen
+#endif
+    ) {
         handleTouch();
         return;
     }
@@ -498,7 +511,86 @@ void drawMoreScreen() {
     tft.drawLine(20, 6, 10, 10, TEXT_COLOR);
     tft.drawLine(10, 10, 20, 14, TEXT_COLOR);
     tft.drawLine(10, 10, 26, 10, TEXT_COLOR);
+
+#ifdef PAKURA_DEBUG
+    const int debugButtonY = MENU_DIALOGUE_Y - LOG_MENU_BUTTON_H - 8;
+    tft.drawRect(
+        LOG_MENU_BUTTON_X,
+        debugButtonY,
+        LOG_MENU_BUTTON_W,
+        LOG_MENU_BUTTON_H,
+        TEXT_COLOR
+    );
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor(
+        (SCREEN_WIDTH - tft.textWidth("DEBUG")) / 2,
+        debugButtonY + 15
+    );
+    tft.print("DEBUG");
+#endif
 }
+
+#ifdef PAKURA_DEBUG
+void drawDebugStatRow(int y, const char* label, int value) {
+    const int labelX = 12;
+    const int valueX = 100;
+    const int minusButtonX = 150;
+    const int plusButtonX = 180;
+    const int buttonW = 24;
+    const int buttonH = 20;
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor(labelX, y + 8);
+    tft.print(label);
+
+    tft.setCursor(valueX, y + 8);
+    tft.print(value);
+
+    tft.drawRect(minusButtonX, y, buttonW, buttonH, TEXT_COLOR);
+    tft.drawRect(plusButtonX, y, buttonW, buttonH, TEXT_COLOR);
+
+    tft.setCursor(minusButtonX + 8, y + 6);
+    tft.print("-");
+    tft.setCursor(plusButtonX + 8, y + 6);
+    tft.print("+");
+}
+
+void drawDebugScreen() {
+    tft.fillScreen(BG_COLOR);
+    drawBackButton();
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor((SCREEN_WIDTH - tft.textWidth("DEBUG")) / 2, 8);
+    tft.print("DEBUG");
+
+    drawDebugStatRow(42, "HAPPINESS", happiness);
+    drawDebugStatRow(74, "ENERGY", energy);
+    drawDebugStatRow(106, "EXPERIENCE", experience);
+
+    const int resetButtonY = SCREEN_HEIGHT - 42;
+    const int resetButtonX = 10;
+    const int resetButtonW = SCREEN_WIDTH - 20;
+    const int resetButtonH = 28;
+    const char* resetLabel = debugConfirmReset ? "CONFIRM?" : "RESET STATS";
+
+    tft.drawRect(resetButtonX, resetButtonY, resetButtonW, resetButtonH, TEXT_COLOR);
+    tft.setCursor((SCREEN_WIDTH - tft.textWidth(resetLabel)) / 2, resetButtonY + 9);
+    tft.print(resetLabel);
+}
+
+void resetStatsToDefault() {
+    happiness = 50;
+    energy = 60;
+    experience = 0;
+    pakuraLevel = 1;
+
+    saveStats();
+}
+#endif
 
 // --------------------------------------------------
 // Status bar
@@ -1117,6 +1209,83 @@ void handleTouch() {
             return;
         }
 
+#ifdef PAKURA_DEBUG
+        if (isDebugScreen) {
+            bool touchedBackButton =
+                pixelX >= BACK_BUTTON_X &&
+                pixelX < BACK_BUTTON_X + BACK_BUTTON_W &&
+                pixelY >= BACK_BUTTON_Y &&
+                pixelY < BACK_BUTTON_Y + BACK_BUTTON_H;
+
+            if (touchedBackButton) {
+                isDebugScreen = false;
+                debugConfirmReset = false;
+                isMoreScreen = true;
+                drawMoreScreen();
+            }
+            else {
+                const int rows[] = {42, 74, 106};
+                const int minusButtonX = 150;
+                const int plusButtonX = 180;
+                const int buttonW = 24;
+                const int buttonH = 20;
+
+                for (int index = 0; index < 3; index++) {
+                    int y = rows[index];
+                    bool touchedMinus =
+                        pixelX >= minusButtonX &&
+                        pixelX < minusButtonX + buttonW &&
+                        pixelY >= y &&
+                        pixelY < y + buttonH;
+                    bool touchedPlus =
+                        pixelX >= plusButtonX &&
+                        pixelX < plusButtonX + buttonW &&
+                        pixelY >= y &&
+                        pixelY < y + buttonH;
+
+                    if (touchedMinus || touchedPlus) {
+                        if (index == 0) {
+                            happiness = constrain(happiness + (touchedPlus ? 10 : -10), 0, 100);
+                        }
+                        else if (index == 1) {
+                            energy = constrain(energy + (touchedPlus ? 10 : -10), 0, 100);
+                        }
+                        else {
+                            experience = constrain(experience + (touchedPlus ? 10 : -10), 0, 99);
+                        }
+                        saveStats();
+                        drawDebugScreen();
+                        break;
+                    }
+                }
+
+                bool touchedResetButton =
+                    pixelX >= 10 &&
+                    pixelX < SCREEN_WIDTH - 10 &&
+                    pixelY >= SCREEN_HEIGHT - 42 &&
+                    pixelY < SCREEN_HEIGHT - 42 + 28;
+
+                if (touchedResetButton) {
+                    if (debugConfirmReset) {
+                        resetStatsToDefault();
+                        debugConfirmReset = false;
+                        drawDebugScreen();
+                    }
+                    else {
+                        debugConfirmReset = true;
+                        drawDebugScreen();
+                    }
+                }
+            }
+
+            while (digitalRead(TOUCH_IRQ) == LOW) {
+                delay(10);
+            }
+
+            return;
+        }
+#endif
+
         if (isInteractScreen) {
             if (chatActive) {
                 while (digitalRead(TOUCH_IRQ) == LOW) {
@@ -1176,6 +1345,24 @@ void handleTouch() {
                 );
                 drawUI();
             }
+
+#ifdef PAKURA_DEBUG
+            if (isMoreScreen) {
+                const int debugButtonY = MENU_DIALOGUE_Y - LOG_MENU_BUTTON_H - 8;
+                bool touchedDebugButton =
+                    pixelX >= LOG_MENU_BUTTON_X &&
+                    pixelX < LOG_MENU_BUTTON_X + LOG_MENU_BUTTON_W &&
+                    pixelY >= debugButtonY &&
+                    pixelY < debugButtonY + LOG_MENU_BUTTON_H;
+
+                if (touchedDebugButton) {
+                    isMoreScreen = false;
+                    isDebugScreen = true;
+                    debugConfirmReset = false;
+                    drawDebugScreen();
+                }
+            }
+#endif
 
             if (isLogScreen) {
                 bool touchedSSIDButton =
