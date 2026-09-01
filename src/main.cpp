@@ -91,6 +91,15 @@ const int MENU_DIALOGUE_Y = SCREEN_HEIGHT - 50 - DIALOGUE_H;
 const int MENU_DIALOGUE_W = SAT_IMAGE_X;
 const int MENU_DIALOGUE_H = DIALOGUE_H;
 
+#ifdef PAKURA_DEBUG
+const int DEBUG_STAT_ROWS[] = {42, 74, 106};
+const int DEBUG_MINUS_BUTTON_X = 150;
+const int DEBUG_PLUS_BUTTON_X = 180;
+const int DEBUG_BUTTON_W = 24;
+const int DEBUG_BUTTON_H = 20;
+const int DEBUG_TOUCH_PADDING = 6;
+#endif
+
 unsigned long lastTimeUpdate = 0;
 
 bool isLogScreen = false;
@@ -536,10 +545,6 @@ void drawMoreScreen() {
 void drawDebugStatRow(int y, const char* label, int value) {
     const int labelX = 12;
     const int valueX = 100;
-    const int minusButtonX = 150;
-    const int plusButtonX = 180;
-    const int buttonW = 24;
-    const int buttonH = 20;
 
     tft.setTextColor(TEXT_COLOR, BG_COLOR);
     tft.setTextSize(1);
@@ -549,12 +554,12 @@ void drawDebugStatRow(int y, const char* label, int value) {
     tft.setCursor(valueX, y + 8);
     tft.print(value);
 
-    tft.drawRect(minusButtonX, y, buttonW, buttonH, TEXT_COLOR);
-    tft.drawRect(plusButtonX, y, buttonW, buttonH, TEXT_COLOR);
+    tft.drawRect(DEBUG_MINUS_BUTTON_X, y, DEBUG_BUTTON_W, DEBUG_BUTTON_H, TEXT_COLOR);
+    tft.drawRect(DEBUG_PLUS_BUTTON_X, y, DEBUG_BUTTON_W, DEBUG_BUTTON_H, TEXT_COLOR);
 
-    tft.setCursor(minusButtonX + 8, y + 6);
+    tft.setCursor(DEBUG_MINUS_BUTTON_X + 8, y + 6);
     tft.print("-");
-    tft.setCursor(plusButtonX + 8, y + 6);
+    tft.setCursor(DEBUG_PLUS_BUTTON_X + 8, y + 6);
     tft.print("+");
 }
 
@@ -567,9 +572,9 @@ void drawDebugScreen() {
     tft.setCursor((SCREEN_WIDTH - tft.textWidth("DEBUG")) / 2, 8);
     tft.print("DEBUG");
 
-    drawDebugStatRow(42, "HAPPINESS", happiness);
-    drawDebugStatRow(74, "ENERGY", energy);
-    drawDebugStatRow(106, "EXPERIENCE", experience);
+    drawDebugStatRow(DEBUG_STAT_ROWS[0], "HAPPINESS", happiness);
+    drawDebugStatRow(DEBUG_STAT_ROWS[1], "ENERGY", energy);
+    drawDebugStatRow(DEBUG_STAT_ROWS[2], "EXPERIENCE", experience);
 
     const int resetButtonY = SCREEN_HEIGHT - 42;
     const int resetButtonX = 10;
@@ -1224,24 +1229,18 @@ void handleTouch() {
                 drawMoreScreen();
             }
             else {
-                const int rows[] = {42, 74, 106};
-                const int minusButtonX = 150;
-                const int plusButtonX = 180;
-                const int buttonW = 24;
-                const int buttonH = 20;
-
                 for (int index = 0; index < 3; index++) {
-                    int y = rows[index];
+                    int y = DEBUG_STAT_ROWS[index];
                     bool touchedMinus =
-                        pixelX >= minusButtonX &&
-                        pixelX < minusButtonX + buttonW &&
-                        pixelY >= y &&
-                        pixelY < y + buttonH;
+                        pixelX >= DEBUG_MINUS_BUTTON_X - DEBUG_TOUCH_PADDING &&
+                        pixelX < DEBUG_MINUS_BUTTON_X + DEBUG_BUTTON_W + DEBUG_TOUCH_PADDING &&
+                        pixelY >= y - DEBUG_TOUCH_PADDING &&
+                        pixelY < y + DEBUG_BUTTON_H + DEBUG_TOUCH_PADDING;
                     bool touchedPlus =
-                        pixelX >= plusButtonX &&
-                        pixelX < plusButtonX + buttonW &&
-                        pixelY >= y &&
-                        pixelY < y + buttonH;
+                        pixelX >= DEBUG_PLUS_BUTTON_X - DEBUG_TOUCH_PADDING &&
+                        pixelX < DEBUG_PLUS_BUTTON_X + DEBUG_BUTTON_W + DEBUG_TOUCH_PADDING &&
+                        pixelY >= y - DEBUG_TOUCH_PADDING &&
+                        pixelY < y + DEBUG_BUTTON_H + DEBUG_TOUCH_PADDING;
 
                     if (touchedMinus || touchedPlus) {
                         if (index == 0) {
@@ -1756,7 +1755,11 @@ void updateStats(int newSSIDCount) {
 
     saveStats();
 
-    if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+    if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+#ifdef PAKURA_DEBUG
+        && !isDebugScreen
+#endif
+    ) {
         drawStatusBar();
         drawStatsArea();
     }
@@ -1768,7 +1771,11 @@ void updateStats(int newSSIDCount) {
 
 void drawCurrentDialogueBox() {
 
-    if (isSSIDScreen) {
+    if (isSSIDScreen
+#ifdef PAKURA_DEBUG
+        || isDebugScreen
+#endif
+    ) {
         return;
     }
 
@@ -1818,7 +1825,11 @@ void updateWiFiDialogue() {
         wifiEventDialogueActive = false;
         currentDialogue = dialogueBeforeWiFiEvent;
 
-        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+    #ifdef PAKURA_DEBUG
+            && !isDebugScreen
+    #endif
+        ) {
             setExpression("neutral");
         }
 
@@ -1838,7 +1849,11 @@ void scanAndStoreSSIDs() {
 
     lastWiFiScan = millis();
     bool scanStartedOnMainMenu =
-        !isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen;
+        !isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+#ifdef PAKURA_DEBUG
+        && !isDebugScreen
+#endif
+    ;
 
     if (scanStartedOnMainMenu) {
         setExpression("surprised");
