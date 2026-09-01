@@ -7,6 +7,9 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
+#include "secrets.h"
+#include "web_server.h"
+
 TFT_eSPI tft = TFT_eSPI();
 
 const char* currentExpression = "neutral";
@@ -90,6 +93,10 @@ const int MENU_DIALOGUE_X = 0;
 const int MENU_DIALOGUE_Y = SCREEN_HEIGHT - 50 - DIALOGUE_H;
 const int MENU_DIALOGUE_W = SAT_IMAGE_X;
 const int MENU_DIALOGUE_H = DIALOGUE_H;
+const int AP_BUTTON_X = LOG_MENU_BUTTON_X;
+const int AP_BUTTON_Y = 30;
+const int AP_BUTTON_W = LOG_MENU_BUTTON_W;
+const int AP_BUTTON_H = LOG_MENU_BUTTON_H;
 
 #ifdef PAKURA_DEBUG
 const int DEBUG_STAT_ROWS[] = {42, 74, 106};
@@ -112,6 +119,7 @@ bool debugConfirmReset = false;
 #endif
 bool isInteractScreen = false;
 int ssidPage = 0;
+bool accessPointEnabled = false;
 
 // --------------------------------------------------
 // WiFi beacon scanning + Stats
@@ -219,6 +227,7 @@ int pngDraw(PNGDRAW *pDraw);
 void handleTouch();
 void updateBlushState();
 bool loadRandomDialogue(const char* filename);
+bool loadDialogueLine(const char* filename, unsigned int requestedLine);
 void scanAndStoreSSIDs();
 bool appendUniqueSSID(const String& ssid);
 void drawCurrentDialogueBox();
@@ -229,6 +238,7 @@ void updateChat();
 void updateSleep();
 void startChat();
 void toggleSleep();
+void toggleAccessPoint();
 
 
 // --------------------------------------------------
@@ -277,6 +287,7 @@ void setup() {
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
+    beginWebServer();
 
     // Draw the interface
     drawUI();
@@ -289,6 +300,8 @@ void setup() {
 // --------------------------------------------------
 
 void loop() {
+
+    handleWebServer();
 
     if (sdCardReady && !isSleeping && millis() - lastWiFiScan >= WIFI_SCAN_INTERVAL) {
         scanAndStoreSSIDs();
@@ -506,6 +519,8 @@ void drawMoreScreen() {
 
     tft.fillScreen(BG_COLOR);
 
+    const char* accessPointLabel = accessPointEnabled ? "PAKURA WAP: ON" : "PAKURA WAP: OFF";
+    drawLogMenuButton(AP_BUTTON_Y, accessPointLabel);
     drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
     drawMenuDialogueArea("/dialogue/more.txt");
 
@@ -779,6 +794,9 @@ void drawMenuDialogueArea(const char* filename) {
 
     if (isSleeping) {
         loadRandomDialogue("/dialogue/sleep.txt");
+    }
+    else if (isMoreScreen) {
+        loadDialogueLine("/dialogue/more.txt", accessPointEnabled ? 2 : 1);
     }
     else {
         loadRandomDialogue(filename);
@@ -1345,8 +1363,18 @@ void handleTouch() {
                 drawUI();
             }
 
-#ifdef PAKURA_DEBUG
             if (isMoreScreen) {
+                bool touchedAccessPointButton =
+                    pixelX >= AP_BUTTON_X &&
+                    pixelX < AP_BUTTON_X + AP_BUTTON_W &&
+                    pixelY >= AP_BUTTON_Y &&
+                    pixelY < AP_BUTTON_Y + AP_BUTTON_H;
+
+                if (touchedAccessPointButton) {
+                    toggleAccessPoint();
+                }
+
+#ifdef PAKURA_DEBUG
                 const int debugButtonY = MENU_DIALOGUE_Y - LOG_MENU_BUTTON_H - 8;
                 bool touchedDebugButton =
                     pixelX >= LOG_MENU_BUTTON_X &&
@@ -1360,8 +1388,8 @@ void handleTouch() {
                     debugConfirmReset = false;
                     drawDebugScreen();
                 }
-            }
 #endif
+            }
 
             if (isLogScreen) {
                 bool touchedSSIDButton =
@@ -1548,6 +1576,19 @@ void toggleSleep() {
     drawUI();
 }
 
+void toggleAccessPoint() {
+
+    if (accessPointEnabled) {
+        disablePakuraAccessPoint();
+        accessPointEnabled = false;
+    }
+    else {
+        accessPointEnabled = enablePakuraAccessPoint();
+    }
+
+    drawMoreScreen();
+}
+
 void updateChat() {
 
     if (chatActive && static_cast<long>(millis() - chatEndsAt) >= 0) {
@@ -1624,6 +1665,46 @@ bool loadRandomDialogue(const char* filename) {
     if (lineCount == 0) {
         Serial.print("Dialogue is empty: ");
         Serial.println(filename);
+        return false;
+    }
+
+    currentDialogue = selectedLine;
+    return true;
+}
+
+bool loadDialogueLine(const char* filename, unsigned int requestedLine) {
+
+    File dialogueFile = SD.open(filename, FILE_READ);
+
+    if (!dialogueFile) {
+        Serial.print("Failed to open dialogue: ");
+        Serial.println(filename);
+        return false;
+    }
+
+    unsigned int lineNumber = 0;
+    String selectedLine;
+
+    while (dialogueFile.available()) {
+        String line = dialogueFile.readStringUntil('\n');
+        line.trim();
+
+        if (line.length() == 0) {
+            continue;
+        }
+
+        lineNumber++;
+        if (lineNumber == requestedLine) {
+            selectedLine = line;
+            break;
+        }
+    }
+
+    dialogueFile.close();
+
+    if (selectedLine.length() == 0) {
+        Serial.print("Dialogue line not found: ");
+        Serial.println(requestedLine);
         return false;
     }
 
