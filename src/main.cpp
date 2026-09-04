@@ -127,6 +127,7 @@ bool accessPointEnabled = false;
 
 const unsigned long WIFI_SCAN_INTERVAL = 60000;
 const char* SSID_FILE = "/data/ssid.csv";
+const char* SSID_TEMP_FILE = "/data/ssid.csv.tmp";
 const char* STATS_FILE = "/data/stats.json";
 const char* STATS_TEMP_FILE = "/data/stats.json.tmp";
 
@@ -213,6 +214,13 @@ bool loadStats();
 bool saveStats();
 void updateStats(int newSSIDCount);
 void drawStatBar(int y, const char* label, int value);
+const char* wifiSecurityName(wifi_auth_mode_t securityType);
+bool parseSSIDRecord(
+    const String& line,
+    int& id,
+    String& ssid,
+    String& bssid
+);
 
 void setExpression(const char* expression);
 
@@ -229,7 +237,13 @@ void updateBlushState();
 bool loadRandomDialogue(const char* filename);
 bool loadDialogueLine(const char* filename, unsigned int requestedLine);
 void scanAndStoreSSIDs();
-bool appendUniqueSSID(const String& ssid);
+bool appendUniqueSSID(
+    const String& ssid,
+    const String& bssid,
+    int rssi,
+    int channel,
+    const String& security
+);
 void drawCurrentDialogueBox();
 void beginWiFiDialogue(const char* filename);
 void finishWiFiDialogue(const char* filename);
@@ -1954,8 +1968,21 @@ void scanAndStoreSSIDs() {
     else {
         for (int networkIndex = 0; networkIndex < networkCount; networkIndex++) {
             String ssid = WiFi.SSID(networkIndex);
+            if (ssid.length() == 0) {
+                ssid = "<hidden>";
+            }
+            String bssid = WiFi.BSSIDstr(networkIndex);
+            int rssi = WiFi.RSSI(networkIndex);
+            int channel = WiFi.channel(networkIndex);
+            String security = wifiSecurityName(WiFi.encryptionType(networkIndex));
 
-            if (ssid.length() > 0 && appendUniqueSSID(ssid)) {
+            if (appendUniqueSSID(
+                ssid,
+                bssid,
+                rssi,
+                channel,
+                security
+            )) {
                 hasNewSSID = true;
                 newSSIDCount++;
             }
@@ -1976,12 +2003,89 @@ void scanAndStoreSSIDs() {
     updateStats(newSSIDCount);
 }
 
-bool appendUniqueSSID(const String& ssid) {
+const char* wifiSecurityName(wifi_auth_mode_t securityType) {
+
+    switch (securityType) {
+        case WIFI_AUTH_OPEN:
+            return "OPEN";
+        case WIFI_AUTH_WEP:
+            return "WEP";
+        case WIFI_AUTH_WPA_PSK:
+            return "WPA-PSK";
+        case WIFI_AUTH_WPA2_PSK:
+            return "WPA2-PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            return "WPA/WPA2-PSK";
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+            return "WPA2-ENTERPRISE";
+        case WIFI_AUTH_WPA3_PSK:
+            return "WPA3-PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            return "WPA2/WPA3-PSK";
+        case WIFI_AUTH_WAPI_PSK:
+            return "WAPI-PSK";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+bool parseSSIDRecord(
+    const String& line,
+    int& id,
+    String& ssid,
+    String& bssid
+) {
+
+    int idEnd = line.indexOf(',');
+    if (idEnd < 0) {
+        return false;
+    }
+
+    id = line.substring(0, idEnd).toInt();
+    int securitySeparator = line.lastIndexOf(',');
+    int channelSeparator = securitySeparator < 0
+        ? -1
+        : line.lastIndexOf(',', securitySeparator - 1);
+    int rssiSeparator = channelSeparator < 0
+        ? -1
+        : line.lastIndexOf(',', channelSeparator - 1);
+    int bssidSeparator = rssiSeparator < 0
+        ? -1
+        : line.lastIndexOf(',', rssiSeparator - 1);
+
+    if (bssidSeparator > idEnd) {
+        ssid = line.substring(idEnd + 1, bssidSeparator);
+        bssid = line.substring(bssidSeparator + 1, rssiSeparator);
+    }
+    else {
+        ssid = line.substring(idEnd + 1);
+        bssid = "";
+    }
+
+    return ssid.length() > 0;
+}
+
+bool appendUniqueSSID(
+    const String& ssid,
+    const String& bssid,
+    int rssi,
+    int channel,
+    const String& security
+) {
 
     File ssidFile = SD.open(SSID_FILE, FILE_READ);
     int nextId = 1;
+    bool existingSSID = false;
 
     if (ssidFile) {
+        File tempFile = SD.open(SSID_TEMP_FILE, FILE_WRITE);
+
+        if (!tempFile) {
+            ssidFile.close();
+            Serial.println("Failed to open temporary SSID file");
+            return false;
+        }
+
         while (ssidFile.available()) {
             String line = ssidFile.readStringUntil('\n');
 
@@ -1989,24 +2093,51 @@ bool appendUniqueSSID(const String& ssid) {
                 line.remove(line.length() - 1);
             }
 
-            int separatorIndex = line.indexOf(',');
+            int storedId = 0;
+            String storedSSID;
+            String storedBSSID;
 
-            if (separatorIndex < 0) {
+            if (!parseSSIDRecord(line, storedId, storedSSID, storedBSSID)) {
+                tempFile.println(line);
                 continue;
             }
 
-            int storedId = line.substring(0, separatorIndex).toInt();
             if (storedId >= nextId) {
                 nextId = storedId + 1;
             }
 
-            if (line.substring(separatorIndex + 1) == ssid) {
-                ssidFile.close();
-                return false;
+            if (storedBSSID == bssid && bssid.length() > 0) {
+                existingSSID = true;
+                tempFile.print(storedId);
+                tempFile.print(',');
+                tempFile.print(ssid);
+                tempFile.print(',');
+                tempFile.print(bssid);
+                tempFile.print(',');
+                tempFile.print(rssi);
+                tempFile.print(',');
+                tempFile.print(channel);
+                tempFile.print(',');
+                tempFile.println(security);
+            }
+            else {
+                tempFile.println(line);
             }
         }
 
         ssidFile.close();
+        tempFile.close();
+
+        if (existingSSID) {
+            SD.remove(SSID_FILE);
+            if (!SD.rename(SSID_TEMP_FILE, SSID_FILE)) {
+                Serial.println("Failed to replace SSID file");
+                return false;
+            }
+            return false;
+        }
+
+        SD.remove(SSID_TEMP_FILE);
     }
 
     ssidFile = SD.open(SSID_FILE, FILE_APPEND);
@@ -2019,7 +2150,15 @@ bool appendUniqueSSID(const String& ssid) {
 
     ssidFile.print(nextId);
     ssidFile.print(',');
-    ssidFile.println(ssid);
+    ssidFile.print(ssid);
+    ssidFile.print(',');
+    ssidFile.print(bssid);
+    ssidFile.print(',');
+    ssidFile.print(rssi);
+    ssidFile.print(',');
+    ssidFile.print(channel);
+    ssidFile.print(',');
+    ssidFile.println(security);
     ssidFile.close();
 
     Serial.print("Stored SSID ");
@@ -2046,8 +2185,11 @@ int loadSSIDPage(int page, int* ids, String* names) {
             line.remove(line.length() - 1);
         }
 
-        int separatorIndex = line.indexOf(',');
-        if (separatorIndex >= 0 && line.substring(separatorIndex + 1).length() > 0) {
+        int storedId = 0;
+        String storedSSID;
+        String storedBSSID;
+
+        if (parseSSIDRecord(line, storedId, storedSSID, storedBSSID)) {
             recordCount++;
         }
     }
@@ -2075,15 +2217,18 @@ int loadSSIDPage(int page, int* ids, String* names) {
             line.remove(line.length() - 1);
         }
 
-        int separatorIndex = line.indexOf(',');
-        if (separatorIndex < 0 || line.substring(separatorIndex + 1).length() == 0) {
+        int storedId = 0;
+        String storedSSID;
+        String storedBSSID;
+
+        if (!parseSSIDRecord(line, storedId, storedSSID, storedBSSID)) {
             continue;
         }
 
         if (recordIndex >= firstRecord) {
             int slot = recordIndex - firstRecord;
-            selectedIds[slot] = line.substring(0, separatorIndex).toInt();
-            selectedNames[slot] = line.substring(separatorIndex + 1);
+            selectedIds[slot] = storedId;
+            selectedNames[slot] = storedSSID;
         }
 
         recordIndex++;
