@@ -7,7 +7,28 @@
 	<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-	<main>PAKURA</main>
+	<main>
+		<header>
+			<div>PAKURA</div>
+			<div class="subtitle">github.com/41bie/pakura</div>
+		</header>
+		<section class="network-panel" aria-live="polite">
+			<div id="network-list" class="network-list"></div>
+			<nav class="pagination" aria-label="Network pages">
+				<button id="previous-page" type="button">&lt;</button>
+				<span id="page-status">SSIDs</span>
+				<button id="next-page" type="button">&gt;</button>
+			</nav>
+		</section>
+		<div class="credits">PAKURA, created by Albie.</div>
+	</main>
+	<div id="detail-modal" class="modal" hidden>
+		<div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+			<h1 id="detail-title">NETWORK</h1>
+			<dl id="detail-fields"></dl>
+			<button id="close-detail" type="button">BACK</button>
+		</div>
+	</div>
 	<script src="/script.js"></script>
 </body>
 </html>

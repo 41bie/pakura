@@ -74,6 +74,8 @@ const int LOG_MENU_BUTTON_W = SCREEN_WIDTH - 20;
 const int LOG_MENU_BUTTON_H = 38;
 const int LOG_MENU_BUTTON_Y = 38;
 const int LOG_MENU_BUTTON_GAP = 10;
+const int BSSID_MENU_BUTTON_Y = LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP;
+const int STATS_MENU_BUTTON_Y = BSSID_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP;
 
 const int SSID_PAGE_BUTTON_Y = SCREEN_HEIGHT - 38;
 const int SSID_PAGE_BUTTON_W = 70;
@@ -112,6 +114,7 @@ unsigned long lastTimeUpdate = 0;
 bool isLogScreen = false;
 bool isMoreScreen = false;
 bool isSSIDScreen = false;
+bool isBSSIDScreen = false;
 bool isStatsScreen = false;
 #ifdef PAKURA_DEBUG
 bool isDebugScreen = false;
@@ -205,11 +208,13 @@ void drawStatsScreen();
 void drawStatsSummary();
 void drawInteractScreen();
 void drawSSIDScreen();
+void drawBSSIDScreen();
 void drawMenuDialogueArea(const char* filename);
 void drawBackButton();
 void drawLogMenuButton(int y, const char* label);
 void drawSSIDPageButton(int x, const char* label);
 int loadSSIDPage(int page, int* ids, String* names);
+int loadBSSIDPage(int page, int* ids, String* bssids);
 bool loadStats();
 bool saveStats();
 void updateStats(int newSSIDCount);
@@ -325,7 +330,7 @@ void loop() {
     updateChat();
     updateSleep();
 
-    if (isLogScreen || isMoreScreen || isSSIDScreen || isStatsScreen || isInteractScreen
+    if (isLogScreen || isMoreScreen || isSSIDScreen || isBSSIDScreen || isStatsScreen || isInteractScreen
 #ifdef PAKURA_DEBUG
         || isDebugScreen
 #endif
@@ -333,13 +338,6 @@ void loop() {
         handleTouch();
         return;
     }
-
-    // do to:
-    // - touchscreen input
-    // - character state
-    // - animations
-    // - stats
-    // - dialogue
 
     // Update the clock once per second (does 1 min currently)
     if (millis() - lastTimeUpdate >= 1000) {
@@ -375,10 +373,8 @@ void drawLogScreen() {
     tft.fillScreen(BG_COLOR);
 
     drawLogMenuButton(LOG_MENU_BUTTON_Y, "SSIDs");
-    drawLogMenuButton(
-        LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP,
-        "STATS"
-    );
+    drawLogMenuButton(BSSID_MENU_BUTTON_Y, "BBSID (MAC)");
+    drawLogMenuButton(STATS_MENU_BUTTON_Y, "STATS");
     drawPng("/pakura/sat.png", SAT_IMAGE_X, SAT_IMAGE_Y);
     drawMenuDialogueArea("/dialogue/log.txt");
     drawBackButton();
@@ -472,6 +468,33 @@ void drawSSIDScreen() {
         tft.print(ids[itemIndex]);
         tft.print(". ");
         tft.print(names[itemIndex]);
+    }
+
+    drawSSIDPageButton(SSID_PAGE_LEFT_X, "<");
+    drawSSIDPageButton(SSID_PAGE_RIGHT_X, ">");
+}
+
+void drawBSSIDScreen() {
+
+    tft.fillScreen(BG_COLOR);
+
+    drawBackButton();
+
+    tft.setTextColor(TEXT_COLOR, BG_COLOR);
+    tft.setTextSize(1);
+    tft.setCursor((SCREEN_WIDTH - tft.textWidth("BBSID (MAC)")) / 2, 8);
+    tft.print("BBSID (MAC)");
+
+    int ids[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    String bssids[10];
+    int displayedCount = loadBSSIDPage(ssidPage, ids, bssids);
+
+    for (int itemIndex = 0; itemIndex < displayedCount; itemIndex++) {
+        int y = 42 + itemIndex * 18;
+        tft.setCursor(12, y);
+        tft.print(ids[itemIndex]);
+        tft.print(". ");
+        tft.print(bssids[itemIndex]);
     }
 
     drawSSIDPageButton(SSID_PAGE_LEFT_X, "<");
@@ -1182,7 +1205,7 @@ void handleTouch() {
         Serial.print(y);
         Serial.println(")");
 
-        if (isSSIDScreen) {
+        if (isSSIDScreen || isBSSIDScreen) {
             bool touchedBackButton =
                 pixelX >= BACK_BUTTON_X &&
                 pixelX < BACK_BUTTON_X + BACK_BUTTON_W &&
@@ -1203,19 +1226,33 @@ void handleTouch() {
 
             if (touchedBackButton) {
                 isSSIDScreen = false;
+                isBSSIDScreen = false;
                 isLogScreen = true;
                 drawLogScreen();
             }
             else if (touchedPreviousPage && ssidPage > 0) {
                 ssidPage--;
-                drawSSIDScreen();
+                if (isSSIDScreen) {
+                    drawSSIDScreen();
+                }
+                else {
+                    drawBSSIDScreen();
+                }
             }
             else if (touchedNextPage) {
                 int ids[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
                 String names[10];
-                if (loadSSIDPage(ssidPage + 1, ids, names) > 0) {
+                int nextPageCount = isSSIDScreen
+                    ? loadSSIDPage(ssidPage + 1, ids, names)
+                    : loadBSSIDPage(ssidPage + 1, ids, names);
+                if (nextPageCount > 0) {
                     ssidPage++;
-                    drawSSIDScreen();
+                    if (isSSIDScreen) {
+                        drawSSIDScreen();
+                    }
+                    else {
+                        drawBSSIDScreen();
+                    }
                 }
             }
 
@@ -1412,17 +1449,31 @@ void handleTouch() {
                     pixelY >= LOG_MENU_BUTTON_Y &&
                     pixelY < LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H;
 
+                bool touchedBSSIDButton =
+                    pixelX >= LOG_MENU_BUTTON_X &&
+                    pixelX < LOG_MENU_BUTTON_X + LOG_MENU_BUTTON_W &&
+                    pixelY >= BSSID_MENU_BUTTON_Y &&
+                    pixelY < BSSID_MENU_BUTTON_Y + LOG_MENU_BUTTON_H;
+
                 bool touchedStatsButton =
                     pixelX >= LOG_MENU_BUTTON_X &&
                     pixelX < LOG_MENU_BUTTON_X + LOG_MENU_BUTTON_W &&
-                    pixelY >= LOG_MENU_BUTTON_Y + LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP &&
-                    pixelY < LOG_MENU_BUTTON_Y + 2 * LOG_MENU_BUTTON_H + LOG_MENU_BUTTON_GAP;
+                    pixelY >= STATS_MENU_BUTTON_Y &&
+                    pixelY < STATS_MENU_BUTTON_Y + LOG_MENU_BUTTON_H;
 
                 if (touchedSSIDButton) {
                     isLogScreen = false;
                     isSSIDScreen = true;
+                    isBSSIDScreen = false;
                     ssidPage = 0;
                     drawSSIDScreen();
+                }
+                else if (touchedBSSIDButton) {
+                    isLogScreen = false;
+                    isBSSIDScreen = true;
+                    isSSIDScreen = false;
+                    ssidPage = 0;
+                    drawBSSIDScreen();
                 }
                 else if (touchedStatsButton) {
                     isLogScreen = false;
@@ -1629,7 +1680,7 @@ void updateSleep() {
         totalEnergyGained += 5;
         saveStats();
 
-        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen) {
+        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isBSSIDScreen && !isStatsScreen) {
             drawStatsArea();
         }
         else if (isStatsScreen) {
@@ -1850,7 +1901,7 @@ void updateStats(int newSSIDCount) {
 
     saveStats();
 
-    if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+    if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isBSSIDScreen && !isStatsScreen
 #ifdef PAKURA_DEBUG
         && !isDebugScreen
 #endif
@@ -1866,7 +1917,7 @@ void updateStats(int newSSIDCount) {
 
 void drawCurrentDialogueBox() {
 
-    if (isSSIDScreen
+    if (isSSIDScreen || isBSSIDScreen
 #ifdef PAKURA_DEBUG
         || isDebugScreen
 #endif
@@ -1920,7 +1971,7 @@ void updateWiFiDialogue() {
         wifiEventDialogueActive = false;
         currentDialogue = dialogueBeforeWiFiEvent;
 
-        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+        if (!isLogScreen && !isMoreScreen && !isSSIDScreen && !isBSSIDScreen && !isStatsScreen
     #ifdef PAKURA_DEBUG
             && !isDebugScreen
     #endif
@@ -1944,7 +1995,7 @@ void scanAndStoreSSIDs() {
 
     lastWiFiScan = millis();
     bool scanStartedOnMainMenu =
-        !isLogScreen && !isMoreScreen && !isSSIDScreen && !isStatsScreen
+        !isLogScreen && !isMoreScreen && !isSSIDScreen && !isBSSIDScreen && !isStatsScreen
 #ifdef PAKURA_DEBUG
         && !isDebugScreen
 #endif
@@ -2241,6 +2292,76 @@ int loadSSIDPage(int page, int* ids, String* names) {
         int sourceIndex = displayedCount - 1 - itemIndex;
         ids[itemIndex] = selectedIds[sourceIndex];
         names[itemIndex] = selectedNames[sourceIndex];
+    }
+
+    return displayedCount;
+}
+
+int loadBSSIDPage(int page, int* ids, String* bssids) {
+
+    File ssidFile = SD.open(SSID_FILE, FILE_READ);
+
+    if (!ssidFile) {
+        return 0;
+    }
+
+    const int PAGE_SIZE = 10;
+    int recordCount = 0;
+
+    while (ssidFile.available()) {
+        String line = ssidFile.readStringUntil('\n');
+        line.trim();
+
+        int storedId = 0;
+        String storedSSID;
+        String storedBSSID;
+        if (parseSSIDRecord(line, storedId, storedSSID, storedBSSID)) {
+            recordCount++;
+        }
+    }
+
+    int firstRecord = recordCount - ((page + 1) * PAGE_SIZE);
+    if (firstRecord < 0) {
+        firstRecord = 0;
+    }
+
+    int lastRecord = recordCount - (page * PAGE_SIZE);
+    if (lastRecord > recordCount) {
+        lastRecord = recordCount;
+    }
+
+    ssidFile.seek(0);
+    int recordIndex = 0;
+    int selectedIds[PAGE_SIZE] = {0};
+    String selectedBSSIDs[PAGE_SIZE];
+
+    while (ssidFile.available() && recordIndex < lastRecord) {
+        String line = ssidFile.readStringUntil('\n');
+        line.trim();
+
+        int storedId = 0;
+        String storedSSID;
+        String storedBSSID;
+        if (!parseSSIDRecord(line, storedId, storedSSID, storedBSSID)) {
+            continue;
+        }
+
+        if (recordIndex >= firstRecord) {
+            int slot = recordIndex - firstRecord;
+            selectedIds[slot] = storedId;
+            selectedBSSIDs[slot] = storedBSSID.length() > 0 ? storedBSSID : "UNKNOWN";
+        }
+
+        recordIndex++;
+    }
+
+    ssidFile.close();
+
+    int displayedCount = lastRecord - firstRecord;
+    for (int itemIndex = 0; itemIndex < displayedCount; itemIndex++) {
+        int sourceIndex = displayedCount - 1 - itemIndex;
+        ids[itemIndex] = selectedIds[sourceIndex];
+        bssids[itemIndex] = selectedBSSIDs[sourceIndex];
     }
 
     return displayedCount;

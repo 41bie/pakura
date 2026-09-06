@@ -7,13 +7,150 @@ body {
 }
 
 body {
-	display: grid;
-	min-height: 100vh;
-	place-items: center;
 	font-family: sans-serif;
 }
 
 main {
+	width: min(100% - 2rem, 760px);
+	margin: 0 auto;
+	padding: 1.5rem 0 2rem;
+}
+
+header {
+	margin-bottom: 1.5rem;
 	font-size: 2rem;
 	letter-spacing: 0.2em;
+	text-align: center;
+}
+
+.subtitle {
+	font-family: monospace;
+	font-size: 1rem;
+	letter-spacing: normal;
+}
+
+.credits {
+	font-family: monospace;
+	font-size: 1rem;
+	letter-spacing: normal;
+    text-align: center;
+	margin-top: 15px;
+}
+
+.network-panel {
+	border: 1px solid #fff;
+	padding: 1rem;
+}
+
+.network-list {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.network-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: 0.75rem;
+	align-items: center;
+	min-height: 3.5rem;
+	border: 1px solid #fff;
+	padding: 0.5rem 0.75rem;
+}
+
+.network-name {
+	min-width: 0;
+	font-family: monospace;
+	font-size: 1rem;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.ssid-mask {
+	display: inline-block;
+	width: 5rem;
+	height: 1.1em;
+	margin-left: 0.1rem;
+	vertical-align: -0.15em;
+	background: #fff;
+}
+
+button {
+	min-width: 4.5rem;
+	min-height: 2.25rem;
+	border: 1px solid #fff;
+	background: #000;
+	color: #fff;
+	cursor: pointer;
+	font: inherit;
+}
+
+button:hover,
+button:focus-visible {
+	background: #fff;
+	color: #000;
+}
+
+.pagination {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 1rem;
+}
+
+.pagination button {
+	min-width: 3rem;
+	font-size: 1.25rem;
+}
+
+.modal[hidden] {
+	display: none;
+}
+
+.modal {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+	background: rgba(0, 0, 0, 0.85);
+}
+
+.modal-content {
+	width: min(100%, 30rem);
+	border: 1px solid #fff;
+	background: #000;
+	padding: 1.25rem;
+}
+
+.modal-content h1 {
+	margin: 0 0 1.25rem;
+	font-size: 1.25rem;
+}
+
+dl {
+	display: grid;
+	grid-template-columns: minmax(6rem, auto) 1fr;
+	gap: 0.75rem 1rem;
+	margin: 0 0 1.5rem;
+}
+
+dt {
+	font-weight: 700;
+}
+
+dd {
+	margin: 0;
+	word-break: break-word;
+}
+
+@media (max-width: 520px) {
+	.network-row {
+		gap: 0.35rem;
+		padding: 0.5rem;
+	}
+
+	.network-row button {
+		min-width: 3.75rem;
+		padding: 0.25rem;
+	}
 }
