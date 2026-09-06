@@ -34,9 +34,11 @@ A pocket-sized ESP32 anime companion that passively scans, fingerprints, and log
 
 ## About Pakura
 
-Pakura is a virtual pet that lives on an ESP32 with a touchscreen display. She passively scans for nearby WiFi access points, "eats" (logs) every unique network she discovers, and reacts with expressions and dialogue on screen. Her stats — happiness, energy, experience, level, and lifetime totals — persist across reboots on an SD card.
+Pakura is a virtual anime-style companion that lives on an ESP32 with a touchscreen display (CYD). She passively scans for nearby WiFi access points, logs every unique network she discovers, and reacts with a range of expressions and dialogue on screen. Her stats — happiness, energy, experience, level, and lifetime totals — persist across reboots on an SD card.
 
-A built-in web server lets you switch Pakura into access point mode and browse everything she's collected (SSIDs, BSSIDs, signal strength, channel, security type) from any phone or laptop, through a small custom-built dashboard.
+A built-in feature lets you switch Pakura into access point mode and browse everything she's collected (SSIDs, BSSIDs, signal strength, channel, security type) from any phone or laptop, through a small custom-built dashboard. All features, including scanning, are active during AP mode.
+
+Pakura has a unique personality — one you'd expect from a real anime character. The idea is that you can take her around on your travels, and gather many unique SSID names in a gamified and educational manner. You aren't just creating a list of network names, you're making Pakura happy.
 
 ## Networking & Wireless Reconnaissance
 
@@ -60,7 +62,7 @@ Pakura's core is a passive 802.11 reconnaissance engine built directly on the ES
 
 ## Development Story
 
-<!-- leave blank for now -->
+<!-- Pakura is a project I worked on during the summer. It allowed me to create something I'm genuinely passionate about, as well as giving me various hands-on skills. -->
 
 ## Features
 
