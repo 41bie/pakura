@@ -133,6 +133,7 @@ const char* SSID_FILE = "/data/ssid.csv";
 const char* SSID_TEMP_FILE = "/data/ssid.csv.tmp";
 const char* STATS_FILE = "/data/stats.json";
 const char* STATS_TEMP_FILE = "/data/stats.json.tmp";
+const char* SETTINGS_FILE = "/data/settings.json";
 
 const unsigned long WIFI_EVENT_DURATION = 3000;
 
@@ -217,6 +218,7 @@ int loadSSIDPage(int page, int* ids, String* names);
 int loadBSSIDPage(int page, int* ids, String* bssids);
 bool loadStats();
 bool saveStats();
+bool ensureDataFiles();
 void updateStats(int newSSIDCount);
 void drawStatBar(int y, const char* label, int value);
 const char* wifiSecurityName(wifi_auth_mode_t securityType);
@@ -300,6 +302,7 @@ void setup() {
         sdCardReady = true;
         Serial.println("SD CARD INITIALIZED");
         randomSeed(micros() ^ analogRead(34));
+        ensureDataFiles();
         loadStats();
         loadRandomDialogue("/dialogue/greeting.txt");
     }
@@ -1775,6 +1778,36 @@ bool loadDialogueLine(const char* filename, unsigned int requestedLine) {
 
     currentDialogue = selectedLine;
     return true;
+}
+
+// --------------------------------------------------
+// SD data files
+// --------------------------------------------------
+
+bool ensureDataFiles() {
+    const char* dataFiles[] = {SETTINGS_FILE, SSID_FILE, STATS_FILE};
+    const size_t dataFileCount = sizeof(dataFiles) / sizeof(dataFiles[0]);
+    bool allFilesReady = true;
+
+    for (size_t index = 0; index < dataFileCount; index++) {
+        if (SD.exists(dataFiles[index])) {
+            continue;
+        }
+
+        File dataFile = SD.open(dataFiles[index], FILE_WRITE);
+        if (!dataFile) {
+            Serial.print("Failed to create data file: ");
+            Serial.println(dataFiles[index]);
+            allFilesReady = false;
+            continue;
+        }
+
+        dataFile.close();
+        Serial.print("Created data file: ");
+        Serial.println(dataFiles[index]);
+    }
+
+    return allFilesReady;
 }
 
 // --------------------------------------------------
