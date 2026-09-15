@@ -2,10 +2,12 @@
 
 # Pakura
 
-<!-- placeholder: hero image/gif of Pakura's display in action -->
-![Pakura hero placeholder](.png)
+<!-- hero -->
+![Pakura hero](images\41bie-on-github.png)
 
-A pocket-sized ESP32 anime companion that passively scans, fingerprints, and logs every WiFi network she detects, reporting her findings through her UI and her own access-point-hosted dashboard.
+A pocket-sized ESP32 anime companion that passively scans, fingerprints, and logs every WiFi network she detects, reporting her findings through her UI and her own access-point-hosted dashboard.  
+
+A project by [41bie](https://github.com/41bie).
 
 `C++` `Arduino Framework` `ESP32` `PlatformIO` `TFT_eSPI` `SPI` `LittleFS` `SD Card` `REST API` `JSON` `HTML` `CSS` `JavaScript`
 
@@ -32,6 +34,8 @@ A pocket-sized ESP32 anime companion that passively scans, fingerprints, and log
 
 ---
 
+![pakura irl](images\pakura-image-1.jpg)
+
 ## About Pakura
 
 Pakura is a virtual anime-style companion that lives on an ESP32 with a touchscreen display (CYD). She passively scans for nearby WiFi access points, logs every unique network she discovers, and reacts with a range of expressions and dialogue on screen. Her stats — happiness, energy, experience, level, and lifetime totals — persist across reboots on an SD card.
@@ -39,6 +43,8 @@ Pakura is a virtual anime-style companion that lives on an ESP32 with a touchscr
 A built-in feature lets you switch Pakura into access point mode and browse everything she's collected (SSIDs, BSSIDs, signal strength, channel, security type) from any phone or laptop, through a small custom-built dashboard. All features, including scanning, are active during AP mode.
 
 Pakura has a unique personality — one you'd expect from a real anime character. The idea is that you can take her around on your travels, and gather many unique SSID names in a gamified and educational manner. You aren't just creating a list of network names, you're making Pakura happy.
+
+Pakura is completely passive. She will not force handshakes or interrupt anything.
 
 ## Networking & Wireless Reconnaissance
 
@@ -62,7 +68,17 @@ Pakura's core is a passive 802.11 reconnaissance engine built directly on the ES
 
 ## Development Story
 
-<!-- Pakura is a project I worked on during the summer. It allowed me to create something I'm genuinely passionate about, as well as giving me various hands-on skills. -->
+Pakura is a project I worked on during the summer. It allowed me to create something I'm genuinely passionate about, as well as giving me various hands-on skills.  
+
+Inspired by the pwnagotchi by evilsocket, I found the idea of having a companion you can carry around intriguing, especially with the topic of networks / cybersecurity, as that is the field I am studying. I used this interest of mine to create my very own companion of a similar nature as a project during the summer.  
+
+Coming up with an original character for my project was fairly simple. I'm very into JRPGs and anime, and I often find myself connecting with these characters. I also wanted something with a bit more expressive capabilities than an emoticon or ascii type character. The idea of a "cyber angel" is nothing new, but I've always appreciated the mix of something spiritual with cyberpunk / technology. I think such a concept should be implemented in media more, it has a lot of potential. The name "Pakura" came from the word "Packet", with "ura" making the name roll off the tongue and sometimes meaning "hidden aspects" in Japanese, which fits the idea that some network information is not immediately visible to the average user. Beacon frames, the information broadcast by routers and access points, are a type of wireless packet.  
+
+I was also watching various YouTube videos at the time, specifically ones that covered projects such as the ESP32Marauder by justcallmekoko. I thought a touch screen was a great idea as I was excited by the idea of implementing interactable UI. It also removed the need for button installation. On a similar note, I wanted my device to be moderately cheap, and I believe I achieved that as Pakura will function with just the ESP32 CYD (cheap yellow display), with some coming packaged with a stylus which is a bonus. It also gives me many opportunities to expand Pakura, such as adding a battery, GPS, NFC, etc.
+
+Development was fun, and for me, that's the best thing. I wanted a noteworthy project that I enjoyed making, rather than a project that checks off a list of wanted skills. Pakura had a slow start, with the screen only displaying about 80% of what I wanted it to, with a section of jumbled pixels completely stuck on the screen. I knew it wasn't a hardware issue as the stock firmware displayed fine. I fixed this issue by trial and error, and the problem was the first line in User_Setup. I was confident I wanted the ILI9341_DRIVER, as that was what research lead me to believe for my particular board. Apparently though, mine was different, and only when I used ILI9342_DRIVER, it worked.  
+
+After that hurdle, I built Pakura at my own pace.
 
 ## Features
 
@@ -145,8 +161,9 @@ pakura v1/
    ```
    pio run --target uploadfs --environment esp32dev
    ```
-6. Populate the SD card with required dialogue/character assets, insert it, and power on Pakura.
-[add link to sd card files]
+6. Populate the SD card with required dialogue/character assets, insert it, and power on Pakura. [HERE](sd)
+
+Please note that I used ILI9342_DRIVER as that is what my particular board wanted, and therefore that is the default in my github repo. You can edit this configuration from the first line in User_Setup.h
 
 ## Development
 
@@ -176,12 +193,16 @@ pakura v1/
 ✅ Better scanning  
 ✅ BSSID viewing menu  
 ✅ HTTP server for detailed network info  
+✅ Fresh SD card handling
+
+❌ Refactoring overhaul  
+❓ Secret future mode
 
 ## Licensing
 
 Pakura uses a dual license:
 
-- **Code** — licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Free to use, modify, and share for non-commercial purposes.
+- **Code** — licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Free to use, modify, and share for non-commercial purposes. Credit me please.
 - **Character & Artwork** — licensed separately under [CC BY-NC-SA 4.0](LICENSE-CHARACTER). This covers Pakura's character design, expressions, sprites, and other original visual assets. Commercial use is not permitted.
 
 See the [LICENSE](LICENSE) and [LICENSE-CHARACTER](LICENSE-CHARACTER) files for full terms.
@@ -194,6 +215,6 @@ Some character artwork was created with AI assistance and subsequently edited an
 
 ## Support Pakura
 
-[link]
+[![Support Pakura on Ko-fi](https://img.shields.io/badge/Support%20me%20on%20Ko--fi-☕-ff5f5f?style=for-the-badge)](https://ko-fi.com/41bie)
 
 Donations will go towards commissioning an artist / hardware / 3D printing capabilities. Thank you!
