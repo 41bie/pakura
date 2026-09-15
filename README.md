@@ -3,7 +3,7 @@
 # Pakura
 
 <!-- hero -->
-![Pakura hero](images\41bie-on-github.png)
+![Pakura hero](images/41bie-on-github.png)
 
 A pocket-sized ESP32 anime companion that passively scans, fingerprints, and logs every WiFi network she detects, reporting her findings through her UI and her own access-point-hosted dashboard.  
 
@@ -34,7 +34,7 @@ A project by [41bie](https://github.com/41bie).
 
 ---
 
-![pakura irl](images\pakura-image-1.jpg)
+![pakura irl](images/pakura-image-1.jpg)
 
 ## About Pakura
 
