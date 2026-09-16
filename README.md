@@ -31,6 +31,8 @@ A project by [41bie](https://github.com/41bie).
 - [Roadmap](#roadmap)
 - [Licensing](#licensing)
 - [Credits](#credits)
+- [Support Pakura](#support-pakura)
+- [Additional Images](#additional-images)
 
 ---
 
@@ -88,7 +90,8 @@ After that hurdle, I built Pakura at my own pace.
 - ILI9342-driven TFT display (240x320, SPI) via `TFT_eSPI`
 - Resistive touchscreen with raw ADC calibration for touch input
 - microSD card storage over SPI for logs, stats, dialogue, and character art
-- Onboard flash (LittleFS) for serving the web dashboard assets
+- Onboard flash (LittleFS) for serving the web dashboard assets  
+Note: Searching "esp32 cyd" is usually enough to find the esp32 with screen already included.
 
 ### Software Architecture
 
@@ -218,3 +221,12 @@ Some character artwork was created with AI assistance and subsequently edited an
 [![Support Pakura on Ko-fi](https://img.shields.io/badge/Support%20me%20on%20Ko--fi-☕-ff5f5f?style=for-the-badge)](https://ko-fi.com/41bie)
 
 Donations will go towards commissioning an artist / hardware / 3D printing capabilities. Thank you!
+
+## Additional Images
+
+Pakura WAP mode - Mobile  
+![pakura mobile ui 1](images/pakura-image-2.jpg)
+![pakura mobile ui 1](images/pakura-image-3.jpg)
+
+Pakura WAP mode - PC  
+placeholder text
