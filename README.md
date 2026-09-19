@@ -40,11 +40,11 @@ A project by [41bie](https://github.com/41bie).
 
 ## About Pakura
 
-Pakura is a virtual anime-style companion that lives on an ESP32 with a touchscreen display (CYD). She passively scans for nearby WiFi access points, logs every unique network she discovers, and reacts with a range of expressions and dialogue on screen. Her stats — happiness, energy, experience, level, and lifetime totals — persist across reboots on an SD card.
+Pakura is a virtual anime-style companion that lives on an ESP32 with a touchscreen display (CYD). She passively scans for nearby WiFi access points, logs every unique network she discovers, and reacts with a range of expressions and dialogue on screen. Her stats (happiness, energy, experience, level, and lifetime totals) persist across reboots on an SD card.
 
 A built-in feature lets you switch Pakura into access point mode and browse everything she's collected (SSIDs, BSSIDs, signal strength, channel, security type) from any phone or laptop, through a small custom-built dashboard. All features, including scanning, are active during AP mode.
 
-Pakura has a unique personality — one you'd expect from a real anime character. The idea is that you can take her around on your travels, and gather many unique SSID names in a gamified and educational manner. You aren't just creating a list of network names, you're making Pakura happy.
+Pakura has a unique personality, one you'd expect from a real anime character. The idea is that you can take her around on your travels, and gather many unique SSID names in a gamified and educational manner. You aren't just collecting a list of network names, you're making Pakura happy.
 
 Pakura is completely passive. She will not force handshakes or interrupt anything.
 
@@ -89,7 +89,7 @@ After that hurdle, I built Pakura at my own pace.
 - ESP32 development board
 - ILI9342-driven TFT display (240x320, SPI) via `TFT_eSPI`
 - Resistive touchscreen with raw ADC calibration for touch input
-- microSD card storage over SPI for logs, stats, dialogue, and character art
+- microSD card storage over SPI for logs, stats, dialogue, and character art (I used 16GB, but that is overkill in her current state)
 - Onboard flash (LittleFS) for serving the web dashboard assets  
 Note: Searching "esp32 cyd" is usually enough to find the esp32 with screen already included.
 
@@ -199,7 +199,8 @@ Please note that I used ILI9342_DRIVER as that is what my particular board wante
 ✅ Fresh SD card handling
 
 ❌ Refactoring overhaul  
-❓ Secret future mode
+❓ Secret future mode  
+I have various ideas when it comes to the Pakura character, I hope I'll be able to find time to continue developing her and potential future related projects.
 
 ## Licensing
 
@@ -220,7 +221,7 @@ Some character artwork was created with AI assistance and subsequently edited an
 
 [![Support Pakura on Ko-fi](https://img.shields.io/badge/Support%20me%20on%20Ko--fi-☕-ff5f5f?style=for-the-badge)](https://ko-fi.com/41bie)
 
-Donations will go towards commissioning an artist / hardware / 3D printing capabilities. Thank you!
+![Pakura promo art 1](images\pakura-promo-1.png)
 
 ## Additional Images
 
