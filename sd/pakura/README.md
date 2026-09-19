@@ -1,0 +1,1 @@
+These are Pakura's sprites. I have included the currently implemented ones, but I do have more for future updates.  
