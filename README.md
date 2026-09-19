@@ -221,7 +221,7 @@ Some character artwork was created with AI assistance and subsequently edited an
 
 [![Support Pakura on Ko-fi](https://img.shields.io/badge/Support%20me%20on%20Ko--fi-☕-ff5f5f?style=for-the-badge)](https://ko-fi.com/41bie)
 
-![Pakura promo art 1](images\pakura-promo-1.png)
+![Pakura promo art 1](images/pakura-promo-1.png)
 
 ## Additional Images
 
