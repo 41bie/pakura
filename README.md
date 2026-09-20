@@ -1,6 +1,6 @@
 <div align="center">
 
-# Pakura
+# Pakura, Cyber Angel
 
 <!-- hero -->
 ![Pakura hero](images/41bie-on-github.png)
@@ -33,6 +33,9 @@ A project by [41bie](https://github.com/41bie).
 - [Credits](#credits)
 - [Support Pakura](#support-pakura)
 - [Additional Images](#additional-images)
+  - [IRL](#pakura-irl)
+  - [Pakura WAP mode HTTP server UI - PC](#pakura-wap-mode-http-server-ui---pc)
+  - [Pakura WAP mode HTTP server UI - MOBILE](#pakura-wap-mode-http-server-ui---mobile)
 
 ---
 
@@ -225,9 +228,14 @@ Some character artwork was created with AI assistance and subsequently edited an
 
 ## Additional Images
 
-Pakura WAP mode - Mobile  
+### Pakura IRL  
+[will be added soon]
+
+### Pakura WAP mode HTTP server UI - PC  
+![pakura pc ui 1](images/pakura-image-4.png)
+![pakura pc ui 2](images/pakura-image-5.png)
+![pakura pc ui 3](images/pakura-image-6.png)
+
+### Pakura WAP mode HTTP server UI - Mobile  
 ![pakura mobile ui 1](images/pakura-image-2.jpg)
 ![pakura mobile ui 1](images/pakura-image-3.jpg)
-
-Pakura WAP mode - PC  
-placeholder text
